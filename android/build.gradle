@@ -34,9 +34,10 @@ android {
 repositories {
   mavenCentral()
   google()
+  maven { url 'https://jitpack.io' }
 }
 
 dependencies {
   implementation 'com.facebook.react:react-android'
-  implementation project(':linkmekit')
+  implementation 'com.github.r-dev-limited:li-nk.me-android-sdk:0.1.0'
 }
