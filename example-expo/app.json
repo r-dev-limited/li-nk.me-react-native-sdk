@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "LinkMe RN Example",
+    "slug": "linkme-rn-example",
+    "scheme": "linkme-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "plugins": [
+      [
+        "@linkme/react-native-sdk/plugin/app.plugin.js",
+        {
+          "hosts": ["li-nk.me"],
+          "associatedDomains": ["li-nk.me"],
+          "schemes": ["linkme-example"]
+        }
+      ]
+    ],
+    "ios": {
+      "bundleIdentifier": "me.link.example"
+    },
+    "android": {
+      "package": "me.link.example"
+    }
+  }
+}
