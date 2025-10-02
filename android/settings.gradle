@@ -1,0 +1,4 @@
+rootProject.name = 'react-native-linkme'
+
+include ':linkmekit'
+project(':linkmekit').projectDir = new File('../../android/linkmekit')
