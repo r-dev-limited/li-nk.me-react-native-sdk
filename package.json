@@ -12,8 +12,7 @@
         "ios",
         "android",
         "plugin",
-        "react-native.config.js",
-        "*.podspec"
+        "react-native.config.js"
     ],
     "scripts": {
         "build": "tsc -p tsconfig.json",

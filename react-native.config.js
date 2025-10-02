@@ -2,7 +2,9 @@ module.exports = {
   dependency: {
     platforms: {
       ios: {
-        podspecPath: 'react-native-linkme.podspec',
+        swiftPackageManager: {
+          packagePath: 'ios/Package.swift',
+        },
       },
       android: {
         sourceDir: 'android',
