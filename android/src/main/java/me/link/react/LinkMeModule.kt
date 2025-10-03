@@ -3,11 +3,13 @@ package me.link.react
 import com.facebook.react.bridge.*
 import me.link.sdk.LinkMe
 import me.link.sdk.LinkPayload
+import android.content.Intent
+import android.net.Uri
 
 class LinkMeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     override fun getName(): String {
-        return "LinkMeModule"
+        return "LinkMe"
     }
 
     @ReactMethod
@@ -78,8 +80,11 @@ class LinkMeModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     @ReactMethod
     fun handleUrl(url: String, promise: Promise) {
         try {
-            val handled = LinkMe.shared.handleUrl(url)
-            promise.resolve(handled)
+            val uri = Uri.parse(url)
+            val intent = Intent(Intent.ACTION_VIEW, uri)
+            LinkMe.shared.handleIntent(intent)
+            // Return true to indicate the URL was forwarded for handling
+            promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("HANDLE_URL_ERROR", e.message, e)
         }

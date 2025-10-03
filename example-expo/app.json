@@ -9,9 +9,15 @@
       [
         "@linkme/react-native-sdk/plugin/app.plugin.js",
         {
-          "hosts": ["li-nk.me"],
-          "associatedDomains": ["li-nk.me"],
-          "schemes": ["linkme-example"]
+          "hosts": [
+            "li-nk.me"
+          ],
+          "associatedDomains": [
+            "li-nk.me"
+          ],
+          "schemes": [
+            "linkme-example"
+          ]
         }
       ]
     ],
@@ -19,7 +25,10 @@
       "bundleIdentifier": "me.link.example"
     },
     "android": {
-      "package": "me.link.example"
-    }
-  }
+      "package": "me.link.example",
+      "minSdkVersion": 24
+    },
+    "sdkVersion": "51.0.0"
+  },
+  "name": "linkme-rn-example"
 }

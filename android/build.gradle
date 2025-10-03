@@ -23,11 +23,11 @@ android {
   }
 
   compileOptions {
-    sourceCompatibility JavaVersion.VERSION_11
-    targetCompatibility JavaVersion.VERSION_11
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
   }
   kotlinOptions {
-    jvmTarget = '11'
+    jvmTarget = '17'
   }
 }
 
@@ -39,5 +39,5 @@ repositories {
 
 dependencies {
   implementation 'com.facebook.react:react-android'
-  implementation 'com.github.r-dev-limited:li-nk.me-android-sdk:0.1.0'
+  implementation 'com.github.r-dev-limited:li-nk.me-android-sdk:0.1.2'
 }
