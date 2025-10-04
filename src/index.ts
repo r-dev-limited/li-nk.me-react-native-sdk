@@ -1,6 +1,6 @@
 import { NativeModules, NativeEventEmitter, Linking, EmitterSubscription } from 'react-native';
 
-const { LinkMe } = NativeModules as { LinkMe: any };
+const LinkMe: any = (NativeModules as any)?.LinkMe ?? null;
 
 export type LinkMePayload = {
     linkId?: string;
@@ -20,21 +20,25 @@ export type LinkMeConfig = {
     includeAdvertisingId?: boolean;
 };
 
-const eventEmitter = new NativeEventEmitter(LinkMe);
+// Create a safe event emitter that does not throw when the native module is unavailable
+const eventEmitter: { addListener: (event: string, listener: (payload: LinkMePayload) => void) => { remove: () => void } } =
+    LinkMe ? new NativeEventEmitter(LinkMe) : {
+        addListener: (_event: string, _listener: (payload: LinkMePayload) => void) => ({ remove: () => { } }),
+    };
 
 let linkingSub: EmitterSubscription | null = null;
 
 function ensureForwarding() {
     if (linkingSub) return;
-    linkingSub = Linking.addEventListener('url', ({ url }) => {
+    linkingSub = Linking.addEventListener('url', ({ url }: { url: string }) => {
         try {
-            LinkMe.handleUrl?.(url);
+            LinkMe?.handleUrl?.(url);
         } catch (_) { }
     });
-    Linking.getInitialURL().then((url) => {
+    Linking.getInitialURL().then((url: string | null) => {
         if (url) {
             try {
-                LinkMe.handleUrl?.(url);
+                LinkMe?.handleUrl?.(url);
             } catch (_) { }
         }
     });
@@ -42,31 +46,31 @@ function ensureForwarding() {
 
 export function configure(config: LinkMeConfig): Promise<void> {
     ensureForwarding();
-    return LinkMe.configure(config);
+    return LinkMe?.configure?.(config) ?? Promise.resolve();
 }
 
 export function getInitialLink(): Promise<LinkMePayload | null> {
-    return LinkMe.getInitialLink();
+    return LinkMe?.getInitialLink?.() ?? Promise.resolve(null);
 }
 
 export function claimDeferredIfAvailable(): Promise<LinkMePayload | null> {
-    return LinkMe.claimDeferredIfAvailable();
+    return LinkMe?.claimDeferredIfAvailable?.() ?? Promise.resolve(null);
 }
 
 export function setUserId(userId: string): Promise<void> {
-    return LinkMe.setUserId(userId);
+    return LinkMe?.setUserId?.(userId) ?? Promise.resolve();
 }
 
 export function setAdvertisingConsent(granted: boolean): Promise<void> {
-    return LinkMe.setAdvertisingConsent(granted);
+    return LinkMe?.setAdvertisingConsent?.(granted) ?? Promise.resolve();
 }
 
 export function setReady(): Promise<void> {
-    return LinkMe.setReady?.() ?? Promise.resolve();
+    return LinkMe?.setReady?.() ?? Promise.resolve();
 }
 
 export function track(event: string, properties?: Record<string, any>): Promise<void> {
-    return LinkMe.track(event, properties ?? null);
+    return LinkMe?.track?.(event, properties ?? null) ?? Promise.resolve();
 }
 
 export function onLink(listener: (payload: LinkMePayload) => void): { remove: () => void } {

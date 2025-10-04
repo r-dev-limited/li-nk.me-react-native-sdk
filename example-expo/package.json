@@ -14,6 +14,7 @@
         "expo-status-bar": "~1.12.1",
         "react": "18.2.0",
         "react-native": "0.74.3",
+        "@react-native/virtualized-lists": "0.74.85",
         "@linkme/react-native-sdk": "file:.."
     },
     "devDependencies": {
