@@ -1,6 +1,6 @@
 {
     "name": "@linkme/react-native-sdk",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "React Native bindings for LinkMe native SDKs (iOS and Android).",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",

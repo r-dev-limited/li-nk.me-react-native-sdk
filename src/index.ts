@@ -77,3 +77,67 @@ export function onLink(listener: (payload: LinkMePayload) => void): { remove: ()
     const sub = eventEmitter.addListener('link', listener);
     return { remove: () => sub.remove() };
 }
+
+// Instance-based client for DI and testing parity with Node SDK
+export class LinkMeClient {
+    private readonly module: any;
+    private readonly emitter: { addListener: (event: string, listener: (payload: LinkMePayload) => void) => { remove: () => void } };
+    private linkingSub: EmitterSubscription | null = null;
+
+    constructor(deps?: { module?: any; emitter?: NativeEventEmitter }) {
+        this.module = deps?.module ?? (NativeModules as any)?.LinkMe ?? null;
+        this.emitter = deps?.emitter ?? (this.module ? new NativeEventEmitter(this.module) : { addListener: (_e: string, _l: (p: LinkMePayload) => void) => ({ remove: () => { } }) });
+    }
+
+    private ensureForwarding() {
+        if (this.linkingSub) return;
+        this.linkingSub = Linking.addEventListener('url', ({ url }: { url: string }) => {
+            try {
+                this.module?.handleUrl?.(url);
+            } catch (_) { }
+        });
+        Linking.getInitialURL().then((url: string | null) => {
+            if (url) {
+                try {
+                    this.module?.handleUrl?.(url);
+                } catch (_) { }
+            }
+        });
+    }
+
+    configure(config: LinkMeConfig): Promise<void> {
+        this.ensureForwarding();
+        return this.module?.configure?.(config) ?? Promise.resolve();
+    }
+
+    getInitialLink(): Promise<LinkMePayload | null> {
+        return this.module?.getInitialLink?.() ?? Promise.resolve(null);
+    }
+
+    claimDeferredIfAvailable(): Promise<LinkMePayload | null> {
+        return this.module?.claimDeferredIfAvailable?.() ?? Promise.resolve(null);
+    }
+
+    setUserId(userId: string): Promise<void> {
+        return this.module?.setUserId?.(userId) ?? Promise.resolve();
+    }
+
+    setAdvertisingConsent(granted: boolean): Promise<void> {
+        return this.module?.setAdvertisingConsent?.(granted) ?? Promise.resolve();
+    }
+
+    setReady(): Promise<void> {
+        return this.module?.setReady?.() ?? Promise.resolve();
+    }
+
+    track(event: string, properties?: Record<string, any>): Promise<void> {
+        return this.module?.track?.(event, properties ?? null) ?? Promise.resolve();
+    }
+
+    onLink(listener: (payload: LinkMePayload) => void): { remove: () => void } {
+        const sub = this.emitter.addListener('link', listener);
+        return { remove: () => sub.remove() };
+    }
+}
+
+export default LinkMeClient;

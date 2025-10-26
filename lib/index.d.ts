@@ -24,3 +24,20 @@ export declare function track(event: string, properties?: Record<string, any>): 
 export declare function onLink(listener: (payload: LinkMePayload) => void): {
     remove: () => void;
 };
+export declare class LinkMeClient {
+    constructor(deps?: {
+        module?: any;
+        emitter?: any;
+    });
+    configure(config: LinkMeConfig): Promise<void>;
+    getInitialLink(): Promise<LinkMePayload | null>;
+    claimDeferredIfAvailable(): Promise<LinkMePayload | null>;
+    setUserId(userId: string): Promise<void>;
+    setAdvertisingConsent(granted: boolean): Promise<void>;
+    setReady(): Promise<void>;
+    track(event: string, properties?: Record<string, any>): Promise<void>;
+    onLink(listener: (payload: LinkMePayload) => void): {
+        remove: () => void;
+    };
+}
+export default LinkMeClient;
