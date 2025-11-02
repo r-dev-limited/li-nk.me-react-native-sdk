@@ -1,42 +1,32 @@
 # Deep Link Fix
 
 ## Problem
-AppDelegate was not forwarding URLs to LinkMe native SDK. URLs only went to React Native's Linking API, so LinkMe SDK never saw them.
+Expo Router intercepts all URLs before LinkMe SDK can process them.
 
-## Fix
+## Solution
+1. Added `LinkMeBridge.h/m` Objective-C shim (compiled via SPM) that exposes LinkMe configuration and URL handling to Objective-C callers.
+2. AppDelegate imports `react_native_linkme/LinkMeBridge.h`, configures LinkMe during launch, and returns `YES` as soon as LinkMe handles a URL/user activity.
+3. `LinkMeURLHandler.swift` centralizes native configuration (auto-loads from Info.plist, accepts runtime updates) and is invoked exclusively through `LinkMeBridge`.
+4. `plugin/app.plugin.js` injects the AppDelegate glue and writes `LinkMeConfig` into Info.plist using the values from `app.json`.
 
-### 1. AppDelegate.mm
-```objc
-// Added import
-#import <LinkMeKit/LinkMeKit-Swift.h>
-
-// Fixed openURL to forward to LinkMe SDK
-- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options {
-  BOOL linkMeHandled = [[LinkMe shared] handleWithUrl:url];
-  BOOL reactHandled = [RCTLinkingManager application:application openURL:url options:options];
-  return [super application:application openURL:url options:options] || linkMeHandled || reactHandled;
-}
-
-// Fixed continueUserActivity to forward to LinkMe SDK
-- (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler {
-  BOOL linkMeHandled = [[LinkMe shared] handleWithUserActivity:userActivity];
-  BOOL reactHandled = [RCTLinkingManager application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
-  return [super application:application continueUserActivity:userActivity restorationHandler:restorationHandler] || linkMeHandled || reactHandled;
-}
+## How It Works
+```
+URL → AppDelegate → LinkMeBridge → LinkMeURLHandler → LinkMe SDK
+                      ↓ handled? YES → return immediately (Expo Router never sees it)
+                      ↓ no → React Native Linking → Expo Router
 ```
 
-### 2. src/index.ts
-Removed unnecessary JavaScript URL forwarding code (Linking.addEventListener, ensureForwarding, etc). Native SDK handles URLs at AppDelegate level.
+## Files
+- `ios/LinkMeBridge.h/.m` – Objective-C façade exposing configure/handle helpers
+- `ios/LinkMeURLHandler.swift` – loads Info.plist config, talks to `LinkMe.shared`
+- `ios/LinkMeModule.swift` – delegates JS configure() to native bridge, emits payloads
+- `plugin/app.plugin.js` – AppDelegate integration + Info.plist config injection
+- `example-expo/app.json` – provides native config values (baseUrl, appId, etc.)
 
 ## Rebuild
 ```bash
 cd sdks/react-native/example-expo
+rm -rf ios/build ios/Pods ios/Podfile.lock
 npx expo prebuild --clean --platform ios
 npx expo run:ios
 ```
-
-## Test
-- **Cold start**: Close app, click `https://0jk2u2h9.li-nk.me/?path=profile` → Opens to /profile
-- **Hot link**: App running, click link → Navigates to target
-- **Deferred**: Uninstall, click link, install, open → Navigates on first launch
-

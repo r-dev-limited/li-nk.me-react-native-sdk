@@ -20,7 +20,16 @@ let package = Package(
             name: "react-native-linkme",
             dependencies: ["LinkMeKit"],
             path: ".",
-            sources: ["ios/**/*.{h,m,mm,swift}"]
+            sources: [
+                "ios/LinkMeBridge.m",
+                "ios/LinkMeURLHandler.swift",
+                "ios/LinkMeModule.swift"
+            ],
+            publicHeadersPath: "ios/include",
+            cSettings: [
+                .headerSearchPath("ios/include"),
+                .headerSearchPath("ios")
+            ]
         ),
     ]
 )

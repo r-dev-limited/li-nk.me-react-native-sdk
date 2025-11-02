@@ -1,4 +1,4 @@
-const { withEntitlementsPlist, withAndroidManifest, withXcodeProject, withDangerousMod, withAppDelegate, withDangerousMod: withPodfile } = require('@expo/config-plugins');
+const { withEntitlementsPlist, withAndroidManifest, withAppDelegate, withInfoPlist } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -7,10 +7,37 @@ function ensureArray(val) {
   return Array.isArray(val) ? val : [val];
 }
 
+function buildIOSConfig(props = {}) {
+  const {
+    baseUrl,
+    appId,
+    appKey,
+    enablePasteboard = false,
+    sendDeviceInfo = true,
+    includeVendorId = true,
+    includeAdvertisingId = false,
+  } = props;
+
+  if (!baseUrl) {
+    return null;
+  }
+
+  return {
+    baseUrl,
+    appId: appId || null,
+    appKey: appKey || null,
+    enablePasteboard,
+    sendDeviceInfo,
+    includeVendorId,
+    includeAdvertisingId,
+  };
+}
+
 const withLinkMe = (config, props = {}) => {
   const schemes = ensureArray(props.schemes);
   const associatedDomains = ensureArray(props.associatedDomains);
   const hosts = ensureArray(props.hosts);
+  const iosConfig = buildIOSConfig(props);
 
   const withIOSEntitlements = withEntitlementsPlist(config, (conf) => {
     if (associatedDomains.length) {
@@ -21,9 +48,54 @@ const withLinkMe = (config, props = {}) => {
     return conf;
   });
 
-  const withIOSConfig = withIOSEntitlements;
+  const withIOSAppDelegate = withAppDelegate(withIOSEntitlements, (conf) => {
+    let { contents } = conf.modResults;
 
-  return withAndroidManifest(withIOSConfig, (conf) => {
+    if (!contents.includes('LinkMeBridge.h')) {
+      contents = contents.replace(
+        /#import <React\/RCTLinkingManager\.h>/,
+        '#import <React/RCTLinkingManager.h>\n#import <react_native_linkme/LinkMeBridge.h>'
+      );
+    }
+
+    contents = contents.replace(
+      /self\.initialProps = @\{\};\n/,
+      'self.initialProps = @{};\n\n  [LinkMeBridge configureIfNeeded];\n'
+    );
+
+    contents = contents.replace(
+      /- \(BOOL\)application:\(UIApplication \*\)application openURL:\(NSURL \*\)url options:\(NSDictionary<UIApplicationOpenURLOptionsKey,id> \*\)options \{[\s\S]*?\}/,
+      `- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options {
+  if ([LinkMeBridge handleURL:url]) {
+    return YES;
+  }
+  return [super application:application openURL:url options:options] || [RCTLinkingManager application:application openURL:url options:options];
+}`
+    );
+
+    contents = contents.replace(
+      /- \(BOOL\)application:\(UIApplication \*\)application continueUserActivity:\(nonnull NSUserActivity \*\)userActivity restorationHandler:\(nonnull void \(\^\)\(NSArray<id<UIUserActivityRestoring>> \* _Nullable\)\)restorationHandler \{[\s\S]*?\}/,
+      `- (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler {
+  if ([LinkMeBridge handleUserActivity:userActivity]) {
+    return YES;
+  }
+  BOOL result = [RCTLinkingManager application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
+  return [super application:application continueUserActivity:userActivity restorationHandler:restorationHandler] || result;
+}`
+    );
+
+    conf.modResults.contents = contents;
+    return conf;
+  });
+
+  const withIOSInfoPlist = withInfoPlist(withIOSAppDelegate, (conf) => {
+    if (iosConfig) {
+      conf.modResults.LinkMeConfig = iosConfig;
+    }
+    return conf;
+  });
+
+  return withAndroidManifest(withIOSInfoPlist, (conf) => {
     const manifest = conf.modResults;
     const app = manifest.application?.find((it) => it['$']['android:name'] === '.MainApplication') || manifest.application?.[0];
     if (app) {

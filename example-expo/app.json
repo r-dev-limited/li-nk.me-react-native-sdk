@@ -19,7 +19,14 @@
           ],
           "schemes": [
             "linkme-example"
-          ]
+          ],
+          "baseUrl": "https://0jk2u2h9.li-nk.me",
+          "appId": "0jk2u2h9",
+          "appKey": "ak_CgJwMBftYHC_7_WU8i-zIQb4a3OXZ4yqazp87iF2uus",
+          "enablePasteboard": false,
+          "sendDeviceInfo": true,
+          "includeVendorId": true,
+          "includeAdvertisingId": false
         }
       ],
       "expo-asset"

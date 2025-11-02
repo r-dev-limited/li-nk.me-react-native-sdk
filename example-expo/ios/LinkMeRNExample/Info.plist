@@ -44,6 +44,23 @@
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>LinkMeConfig</key>
+    <dict>
+      <key>baseUrl</key>
+      <string>https://0jk2u2h9.li-nk.me</string>
+      <key>appId</key>
+      <string>0jk2u2h9</string>
+      <key>appKey</key>
+      <string>ak_CgJwMBftYHC_7_WU8i-zIQb4a3OXZ4yqazp87iF2uus</string>
+      <key>enablePasteboard</key>
+      <false/>
+      <key>sendDeviceInfo</key>
+      <true/>
+      <key>includeVendorId</key>
+      <true/>
+      <key>includeAdvertisingId</key>
+      <false/>
+    </dict>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>

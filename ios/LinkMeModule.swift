@@ -18,35 +18,25 @@ class LinkMeModule: RCTEventEmitter {
   
   @objc
   func configure(_ config: NSDictionary, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+    NSLog("[LinkMeModule] configure called")
     guard let baseUrlString = config["baseUrl"] as? String,
-          let baseUrl = URL(string: baseUrlString) else {
+          URL(string: baseUrlString) != nil else {
       rejecter("INVALID_ARGS", "baseUrl is required", nil)
       return
     }
-    
-    let linkMeConfig = LinkMe.Config(
-      baseUrl: baseUrl,
-      appId: config["appId"] as? String,
-      appKey: config["appKey"] as? String,
-      enablePasteboard: config["enablePasteboard"] as? Bool ?? false,
-      sendDeviceInfo: config["sendDeviceInfo"] as? Bool ?? true,
-      includeVendorId: config["includeVendorId"] as? Bool ?? true,
-      includeAdvertisingId: config["includeAdvertisingId"] as? Bool ?? false
-    )
-    
-    LinkMe.shared.configure(config: linkMeConfig)
-    
+
+    LinkMeURLHandler.applyConfig(config)
+
     // Subscribe to LinkMe payloads and emit to React Native
     linkListenerRemover?.()
     linkListenerRemover = LinkMe.shared.addListener { [weak self] payload in
       guard let self = self else { return }
       let dict = self.dictionary(from: payload)
-      #if DEBUG
-      NSLog("[LinkMeModule] Emitting link event payload=%@", dict ?? "nil")
-      #endif
+      NSLog("[LinkMeModule] Listener received payload, emitting to RN: %@", dict ?? "nil")
       self.sendEvent(withName: "link", body: dict)
     }
-    
+    NSLog("[LinkMeModule] Listener registered")
+
     resolver(nil)
   }
   
@@ -56,18 +46,24 @@ class LinkMeModule: RCTEventEmitter {
   
   @objc
   func getInitialLink(_ resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+    NSLog("[LinkMeModule] getInitialLink called")
     LinkMe.shared.getInitialLink { payload in
       DispatchQueue.main.async {
-        resolver(self.dictionary(from: payload))
+        let dict = self.dictionary(from: payload)
+        NSLog("[LinkMeModule] getInitialLink returning: %@", dict ?? "nil")
+        resolver(dict)
       }
     }
   }
   
   @objc
   func claimDeferredIfAvailable(_ resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+    NSLog("[LinkMeModule] claimDeferredIfAvailable called")
     LinkMe.shared.claimDeferredIfAvailable { payload in
       DispatchQueue.main.async {
-        resolver(self.dictionary(from: payload))
+        let dict = self.dictionary(from: payload)
+        NSLog("[LinkMeModule] claimDeferredIfAvailable returning: %@", dict ?? "nil")
+        resolver(dict)
       }
     }
   }
