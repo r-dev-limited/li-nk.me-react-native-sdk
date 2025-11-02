@@ -3,11 +3,17 @@ import React
 import LinkMeKit
 
 @objc(LinkMeModule)
-class LinkMeModule: NSObject {
+class LinkMeModule: RCTEventEmitter {
+  
+  private var linkListenerRemover: (() -> Void)?
   
   @objc
   static func requiresMainQueueSetup() -> Bool {
     return false
+  }
+  
+  override func supportedEvents() -> [String]! {
+    return ["link"]
   }
   
   @objc
@@ -29,7 +35,23 @@ class LinkMeModule: NSObject {
     )
     
     LinkMe.shared.configure(config: linkMeConfig)
+    
+    // Subscribe to LinkMe payloads and emit to React Native
+    linkListenerRemover?.()
+    linkListenerRemover = LinkMe.shared.addListener { [weak self] payload in
+      guard let self = self else { return }
+      let dict = self.dictionary(from: payload)
+      #if DEBUG
+      NSLog("[LinkMeModule] Emitting link event payload=%@", dict ?? "nil")
+      #endif
+      self.sendEvent(withName: "link", body: dict)
+    }
+    
     resolver(nil)
+  }
+  
+  deinit {
+    linkListenerRemover?()
   }
   
   @objc
@@ -81,7 +103,15 @@ class LinkMeModule: NSObject {
       rejecter("INVALID_URL", "Invalid URL format", nil)
       return
     }
+    
+    #if DEBUG
+    NSLog("[LinkMeModule] handleUrl url=%@", url.absoluteString)
+    #endif
+    
+    // Handle the URL - this will process it asynchronously and emit via listener
     let handled = LinkMe.shared.handle(url: url)
+    
+    // Return true if the URL was accepted for processing
     resolver(handled)
   }
   

@@ -1,4 +1,6 @@
-const { withEntitlementsPlist, withAndroidManifest } = require('@expo/config-plugins');
+const { withEntitlementsPlist, withAndroidManifest, withXcodeProject, withDangerousMod, withAppDelegate, withDangerousMod: withPodfile } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
 
 function ensureArray(val) {
   if (!val) return [];
@@ -10,7 +12,7 @@ const withLinkMe = (config, props = {}) => {
   const associatedDomains = ensureArray(props.associatedDomains);
   const hosts = ensureArray(props.hosts);
 
-  const withIOS = withEntitlementsPlist(config, (conf) => {
+  const withIOSEntitlements = withEntitlementsPlist(config, (conf) => {
     if (associatedDomains.length) {
       const current = conf.modResults['com.apple.developer.associated-domains'] || [];
       const merged = Array.from(new Set([...current, ...associatedDomains.map((d) => `applinks:${d}`)]));
@@ -19,7 +21,9 @@ const withLinkMe = (config, props = {}) => {
     return conf;
   });
 
-  return withAndroidManifest(withIOS, (conf) => {
+  const withIOSConfig = withIOSEntitlements;
+
+  return withAndroidManifest(withIOSConfig, (conf) => {
     const manifest = conf.modResults;
     const app = manifest.application?.find((it) => it['$']['android:name'] === '.MainApplication') || manifest.application?.[0];
     if (app) {

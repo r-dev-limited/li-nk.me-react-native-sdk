@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -12,18 +12,6 @@ import {
 export default function Index() {
     const router = useRouter();
     const [latest, setLatest] = useState<LinkMePayload | null>(null);
-
-    useEffect(() => {
-        (async () => {
-            const deferred = await claimDeferredIfAvailable();
-            if (deferred) {
-                setLatest(deferred);
-                if (deferred.path) {
-                    router.replace(deferred.path as any);
-                }
-            }
-        })();
-    }, []);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -47,7 +35,8 @@ export default function Index() {
                             if (p) {
                                 setLatest(p);
                                 if (p.path) {
-                                    router.push(p.path as any);
+                                    const targetPath = p.path.startsWith('/') ? p.path : `/${p.path}`;
+                                    router.push(targetPath as any);
                                 }
                             }
                         }}

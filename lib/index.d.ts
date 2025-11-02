@@ -17,6 +17,7 @@ export type LinkMeConfig = {
 };
 export declare function configure(config: LinkMeConfig): Promise<void>;
 export declare function getInitialLink(): Promise<LinkMePayload | null>;
+export declare function handleUrl(url: string): Promise<boolean>;
 export declare function claimDeferredIfAvailable(): Promise<LinkMePayload | null>;
 export declare function setUserId(userId: string): Promise<void>;
 export declare function setAdvertisingConsent(granted: boolean): Promise<void>;
@@ -28,13 +29,10 @@ export declare function onLink(listener: (payload: LinkMePayload) => void): {
 export declare class LinkMeClient {
     private readonly module;
     private readonly emitter;
-    private linkingSub;
-    private readonly forwardUrl;
     constructor(deps?: {
         module?: any;
         emitter?: NativeEventEmitter;
     });
-    private ensureForwarding;
     configure(config: LinkMeConfig): Promise<void>;
     getInitialLink(): Promise<LinkMePayload | null>;
     claimDeferredIfAvailable(): Promise<LinkMePayload | null>;

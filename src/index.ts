@@ -1,64 +1,6 @@
-import { NativeModules, NativeEventEmitter, Linking, EmitterSubscription } from 'react-native';
+import { NativeModules, NativeEventEmitter } from 'react-native';
 
 const LinkMe: any = (NativeModules as any)?.LinkMe ?? null;
-
-type UrlListener = (url: string) => void;
-
-const urlSubscribers = new Set<UrlListener>();
-let lastEmittedUrl: string | null = null;
-
-function emitUrl(rawUrl: string | null | undefined) {
-    if (!rawUrl) return;
-    if (rawUrl === lastEmittedUrl) return;
-    lastEmittedUrl = rawUrl;
-    const listeners = Array.from(urlSubscribers);
-    for (const listener of listeners) {
-        try {
-            listener(rawUrl);
-        } catch (_) { }
-    }
-}
-
-function addUrlSubscriber(listener: UrlListener): () => void {
-    urlSubscribers.add(listener);
-    return () => {
-        urlSubscribers.delete(listener);
-    };
-}
-
-if (LinkMe) {
-    addUrlSubscriber((url) => {
-        try {
-            LinkMe?.handleUrl?.(url);
-        } catch (_) { }
-    });
-}
-
-const originalGetInitialURL = typeof Linking.getInitialURL === 'function'
-    ? Linking.getInitialURL.bind(Linking)
-    : null;
-
-let initialUrlCaptured = false;
-let initialUrlValue: string | null = null;
-let initialUrlPromise: Promise<string | null> | null = null;
-
-if (originalGetInitialURL) {
-    Linking.getInitialURL = () => {
-        if (initialUrlCaptured) {
-            return Promise.resolve(initialUrlValue);
-        }
-        if (!initialUrlPromise) {
-            initialUrlPromise = Promise.resolve(originalGetInitialURL()).then((value) => {
-                const url = value ?? null;
-                initialUrlCaptured = true;
-                initialUrlValue = url;
-                emitUrl(url);
-                return url;
-            });
-        }
-        return initialUrlPromise;
-    };
-}
 
 export type LinkMePayload = {
     linkId?: string;
@@ -84,27 +26,27 @@ const eventEmitter: { addListener: (event: string, listener: (payload: LinkMePay
         addListener: (_event: string, _listener: (payload: LinkMePayload) => void) => ({ remove: () => { } }),
     };
 
-let linkingSub: EmitterSubscription | null = null;
-
-function ensureForwarding() {
-    if (linkingSub) return;
-    linkingSub = Linking.addEventListener('url', ({ url }: { url: string }) => {
-        emitUrl(url);
-    });
-    Linking.getInitialURL().then((url: string | null) => {
-        emitUrl(url);
-    });
-}
-
-ensureForwarding();
-
-export function configure(config: LinkMeConfig): Promise<void> {
-    ensureForwarding();
-    return LinkMe?.configure?.(config) ?? Promise.resolve();
+export async function configure(config: LinkMeConfig): Promise<void> {
+    await (LinkMe?.configure?.(config) ?? Promise.resolve());
 }
 
 export function getInitialLink(): Promise<LinkMePayload | null> {
     return LinkMe?.getInitialLink?.() ?? Promise.resolve(null);
+}
+
+export function handleUrl(url: string): Promise<boolean> {
+    if (!LinkMe?.handleUrl) {
+        return Promise.resolve(false);
+    }
+    try {
+        return Promise.resolve(LinkMe.handleUrl(url)).catch((err: any) => {
+            console.error('[LinkMe SDK] Error in handleUrl:', err);
+            return false;
+        });
+    } catch (err) {
+        console.error('[LinkMe SDK] Error calling handleUrl:', err);
+        return Promise.resolve(false);
+    }
 }
 
 export function claimDeferredIfAvailable(): Promise<LinkMePayload | null> {
@@ -136,38 +78,14 @@ export function onLink(listener: (payload: LinkMePayload) => void): { remove: ()
 export class LinkMeClient {
     private readonly module: any;
     private readonly emitter: { addListener: (event: string, listener: (payload: LinkMePayload) => void) => { remove: () => void } };
-    private linkingSub: EmitterSubscription | null = null;
-    private readonly forwardUrl: (url: string | null | undefined) => void;
 
     constructor(deps?: { module?: any; emitter?: NativeEventEmitter }) {
         this.module = deps?.module ?? (NativeModules as any)?.LinkMe ?? null;
         this.emitter = deps?.emitter ?? (this.module ? new NativeEventEmitter(this.module) : { addListener: (_e: string, _l: (p: LinkMePayload) => void) => ({ remove: () => { } }) });
-        this.forwardUrl = (url: string | null | undefined) => {
-            if (!url) return;
-            if (this.module === LinkMe) {
-                return;
-            }
-            try {
-                this.module?.handleUrl?.(url);
-            } catch (_) { }
-        };
     }
 
-    private ensureForwarding() {
-        if (this.linkingSub) return;
-        this.linkingSub = Linking.addEventListener('url', ({ url }: { url: string }) => {
-            emitUrl(url);
-            this.forwardUrl(url);
-        });
-        Linking.getInitialURL().then((url: string | null) => {
-            emitUrl(url);
-            this.forwardUrl(url);
-        });
-    }
-
-    configure(config: LinkMeConfig): Promise<void> {
-        this.ensureForwarding();
-        return this.module?.configure?.(config) ?? Promise.resolve();
+    async configure(config: LinkMeConfig): Promise<void> {
+        await (this.module?.configure?.(config) ?? Promise.resolve());
     }
 
     getInitialLink(): Promise<LinkMePayload | null> {

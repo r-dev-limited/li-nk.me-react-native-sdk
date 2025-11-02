@@ -25,6 +25,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="linkme-example"/>
+        <data android:scheme="me.link.example"/>
         <data android:scheme="exp+linkme-rn-example"/>
       </intent-filter>
     </activity>
