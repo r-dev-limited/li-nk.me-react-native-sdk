@@ -2,6 +2,64 @@ import { NativeModules, NativeEventEmitter, Linking, EmitterSubscription } from 
 
 const LinkMe: any = (NativeModules as any)?.LinkMe ?? null;
 
+type UrlListener = (url: string) => void;
+
+const urlSubscribers = new Set<UrlListener>();
+let lastEmittedUrl: string | null = null;
+
+function emitUrl(rawUrl: string | null | undefined) {
+    if (!rawUrl) return;
+    if (rawUrl === lastEmittedUrl) return;
+    lastEmittedUrl = rawUrl;
+    const listeners = Array.from(urlSubscribers);
+    for (const listener of listeners) {
+        try {
+            listener(rawUrl);
+        } catch (_) { }
+    }
+}
+
+function addUrlSubscriber(listener: UrlListener): () => void {
+    urlSubscribers.add(listener);
+    return () => {
+        urlSubscribers.delete(listener);
+    };
+}
+
+if (LinkMe) {
+    addUrlSubscriber((url) => {
+        try {
+            LinkMe?.handleUrl?.(url);
+        } catch (_) { }
+    });
+}
+
+const originalGetInitialURL = typeof Linking.getInitialURL === 'function'
+    ? Linking.getInitialURL.bind(Linking)
+    : null;
+
+let initialUrlCaptured = false;
+let initialUrlValue: string | null = null;
+let initialUrlPromise: Promise<string | null> | null = null;
+
+if (originalGetInitialURL) {
+    Linking.getInitialURL = () => {
+        if (initialUrlCaptured) {
+            return Promise.resolve(initialUrlValue);
+        }
+        if (!initialUrlPromise) {
+            initialUrlPromise = Promise.resolve(originalGetInitialURL()).then((value) => {
+                const url = value ?? null;
+                initialUrlCaptured = true;
+                initialUrlValue = url;
+                emitUrl(url);
+                return url;
+            });
+        }
+        return initialUrlPromise;
+    };
+}
+
 export type LinkMePayload = {
     linkId?: string;
     path?: string;
@@ -31,18 +89,14 @@ let linkingSub: EmitterSubscription | null = null;
 function ensureForwarding() {
     if (linkingSub) return;
     linkingSub = Linking.addEventListener('url', ({ url }: { url: string }) => {
-        try {
-            LinkMe?.handleUrl?.(url);
-        } catch (_) { }
+        emitUrl(url);
     });
     Linking.getInitialURL().then((url: string | null) => {
-        if (url) {
-            try {
-                LinkMe?.handleUrl?.(url);
-            } catch (_) { }
-        }
+        emitUrl(url);
     });
 }
+
+ensureForwarding();
 
 export function configure(config: LinkMeConfig): Promise<void> {
     ensureForwarding();
@@ -83,25 +137,31 @@ export class LinkMeClient {
     private readonly module: any;
     private readonly emitter: { addListener: (event: string, listener: (payload: LinkMePayload) => void) => { remove: () => void } };
     private linkingSub: EmitterSubscription | null = null;
+    private readonly forwardUrl: (url: string | null | undefined) => void;
 
     constructor(deps?: { module?: any; emitter?: NativeEventEmitter }) {
         this.module = deps?.module ?? (NativeModules as any)?.LinkMe ?? null;
         this.emitter = deps?.emitter ?? (this.module ? new NativeEventEmitter(this.module) : { addListener: (_e: string, _l: (p: LinkMePayload) => void) => ({ remove: () => { } }) });
+        this.forwardUrl = (url: string | null | undefined) => {
+            if (!url) return;
+            if (this.module === LinkMe) {
+                return;
+            }
+            try {
+                this.module?.handleUrl?.(url);
+            } catch (_) { }
+        };
     }
 
     private ensureForwarding() {
         if (this.linkingSub) return;
         this.linkingSub = Linking.addEventListener('url', ({ url }: { url: string }) => {
-            try {
-                this.module?.handleUrl?.(url);
-            } catch (_) { }
+            emitUrl(url);
+            this.forwardUrl(url);
         });
         Linking.getInitialURL().then((url: string | null) => {
-            if (url) {
-                try {
-                    this.module?.handleUrl?.(url);
-                } catch (_) { }
-            }
+            emitUrl(url);
+            this.forwardUrl(url);
         });
     }
 

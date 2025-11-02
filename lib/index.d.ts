@@ -1,3 +1,4 @@
+import { NativeEventEmitter } from 'react-native';
 export type LinkMePayload = {
     linkId?: string;
     path?: string;
@@ -25,10 +26,15 @@ export declare function onLink(listener: (payload: LinkMePayload) => void): {
     remove: () => void;
 };
 export declare class LinkMeClient {
+    private readonly module;
+    private readonly emitter;
+    private linkingSub;
+    private readonly forwardUrl;
     constructor(deps?: {
         module?: any;
-        emitter?: any;
+        emitter?: NativeEventEmitter;
     });
+    private ensureForwarding;
     configure(config: LinkMeConfig): Promise<void>;
     getInitialLink(): Promise<LinkMePayload | null>;
     claimDeferredIfAvailable(): Promise<LinkMePayload | null>;
