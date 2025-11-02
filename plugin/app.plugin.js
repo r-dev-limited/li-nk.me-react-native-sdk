@@ -36,6 +36,7 @@ const withLinkMe = (config, props = {}) => {
         mainActivity['intent-filter'] = mainActivity['intent-filter'] || [];
         hosts.forEach((host) => {
           mainActivity['intent-filter'].push({
+            '$': { 'android:autoVerify': 'true' },
             action: [{ '$': { 'android:name': 'android.intent.action.VIEW' } }],
             category: [
               { '$': { 'android:name': 'android.intent.category.DEFAULT' } },
