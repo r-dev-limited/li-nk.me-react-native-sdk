@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import {
     configure,
@@ -14,6 +14,7 @@ export default function RootLayout() {
     const router = useRouter();
     const unsubRef = useRef<{ remove: () => void } | null>(null);
     const initializedRef = useRef(false);
+    const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
         // Prevent double initialization in React strict mode
@@ -80,6 +81,8 @@ export default function RootLayout() {
                 console.log('[LinkMe Example] Initialization complete');
             } catch (error) {
                 console.error('[LinkMe Example] Initialization error:', error);
+            } finally {
+                setIsReady(true);
             }
         })();
 
@@ -88,6 +91,10 @@ export default function RootLayout() {
             unsubRef.current?.remove();
         };
     }, []);
+
+    if (!isReady) {
+        return null;
+    }
 
     return (
         <Stack

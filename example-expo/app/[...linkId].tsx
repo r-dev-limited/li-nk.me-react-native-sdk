@@ -1,10 +1,16 @@
-import { View } from 'react-native';
+import { useLayoutEffect } from 'react';
+import { useRouter } from 'expo-router';
 
 export const options = {
     headerShown: false,
 };
 
 export default function LinkMeFallback() {
-    return <View style={{ flex: 1 }} />;
-}
+    const router = useRouter();
 
+    useLayoutEffect(() => {
+        router.replace('/');
+    }, [router]);
+
+    return null;
+}
