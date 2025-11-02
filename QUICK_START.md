@@ -6,6 +6,8 @@
 npm install @linkme/react-native-sdk
 ```
 
+> The SDK is implemented entirely in TypeScript; no native modules or platform-specific code is required.
+
 ## Basic Setup (Expo Router)
 
 ### 1. Configure app.json

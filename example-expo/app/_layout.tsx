@@ -8,11 +8,10 @@ import {
     track,
     LinkMePayload,
 } from '@linkme/react-native-sdk';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 export default function RootLayout() {
     const router = useRouter();
-    const pathname = usePathname();
     const unsubRef = useRef<{ remove: () => void } | null>(null);
     const initializedRef = useRef(false);
 

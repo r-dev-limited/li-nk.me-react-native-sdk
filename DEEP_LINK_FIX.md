@@ -1,32 +1,30 @@
-# Deep Link Fix
+# Expo Router Deep Link Notes
 
-## Problem
-Expo Router intercepts all URLs before LinkMe SDK can process them.
+## Current Architecture
+- The React Native SDK is implemented entirely in TypeScript.
+- Deep link events come from `Linking.getInitialURL()` and `Linking.addEventListener('url', ...)`.
+- The SDK normalizes paths and invokes registered `onLink` listeners in JavaScript.
+- No native bridge, Swift packages, or Gradle modules are required.
 
-## Solution
-1. Added `LinkMeBridge.h/m` Objective-C shim (compiled via SPM) that exposes LinkMe configuration and URL handling to Objective-C callers.
-2. AppDelegate imports `react_native_linkme/LinkMeBridge.h`, configures LinkMe during launch, and returns `YES` as soon as LinkMe handles a URL/user activity.
-3. `LinkMeURLHandler.swift` centralizes native configuration (auto-loads from Info.plist, accepts runtime updates) and is invoked exclusively through `LinkMeBridge`.
-4. `plugin/app.plugin.js` injects the AppDelegate glue and writes `LinkMeConfig` into Info.plist using the values from `app.json`.
-
-## How It Works
+## Event Flow
 ```
-URL → AppDelegate → LinkMeBridge → LinkMeURLHandler → LinkMe SDK
-                      ↓ handled? YES → return immediately (Expo Router never sees it)
-                      ↓ no → React Native Linking → Expo Router
+URL tap → React Native Linking → LinkMe controller (TS) → onLink listeners → App routing
 ```
 
-## Files
-- `ios/LinkMeBridge.h/.m` – Objective-C façade exposing configure/handle helpers
-- `ios/LinkMeURLHandler.swift` – loads Info.plist config, talks to `LinkMe.shared`
-- `ios/LinkMeModule.swift` – delegates JS configure() to native bridge, emits payloads
-- `plugin/app.plugin.js` – AppDelegate integration + Info.plist config injection
-- `example-expo/app.json` – provides native config values (baseUrl, appId, etc.)
+## Integration Checklist
+1. Call `configure()` once on startup (for example, inside `app/_layout.tsx`).
+2. Use `onLink()` to react to payloads and drive navigation.
+3. Call `getInitialLink()` after configuring to handle cold-start URLs.
+4. Optionally call `claimDeferredIfAvailable()` when no initial link is present.
+5. Use `track()` for analytics events such as `open`, `install`, etc.
 
-## Rebuild
-```bash
-cd sdks/react-native/example-expo
-rm -rf ios/build ios/Pods ios/Podfile.lock
-npx expo prebuild --clean --platform ios
-npx expo run:ios
-```
+## Expo Specific Setup
+- Configure your schemes and App/Android Links with the Expo config plugin (`@linkme/react-native-sdk/plugin/app.plugin.js`).
+- No `expo prebuild` is required unless you need native customizations unrelated to LinkMe.
+- For development builds, run `npx expo start --dev-client` and install the Dev Client once.
+
+## Troubleshooting
+- Verify `configure()` succeeds before handling links.
+- Ensure the domain you are testing is present in `associatedDomains` (iOS) and `hosts` (Android) plugin options.
+- Use `console.log` inside the `onLink` callback to inspect payloads.
+- Remember to remove listeners on unmount via the returned `remove()` handle.

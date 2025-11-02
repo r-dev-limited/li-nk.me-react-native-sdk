@@ -1,7 +1,7 @@
 {
     "name": "@linkme/react-native-sdk",
     "version": "0.1.1",
-    "description": "React Native bindings for LinkMe native SDKs (iOS and Android).",
+    "description": "Pure TypeScript React Native SDK for LinkMe deep and deferred links.",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "react-native": "src/index.ts",
@@ -9,10 +9,7 @@
     "files": [
         "src",
         "lib",
-        "ios",
-        "android",
-        "plugin",
-        "react-native.config.js"
+        "plugin"
     ],
     "scripts": {
         "build": "tsc -p tsconfig.json",

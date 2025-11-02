@@ -1,24 +1,49 @@
-import { useState } from 'react';
 import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
     claimDeferredIfAvailable,
+    getInitialLink,
+    onLink,
     setAdvertisingConsent,
     setReady,
     track,
     LinkMePayload,
 } from '@linkme/react-native-sdk';
+import { useEffect, useState } from 'react';
 
 export default function Index() {
     const router = useRouter();
     const [latest, setLatest] = useState<LinkMePayload | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                const initial = await getInitialLink();
+                if (active && initial) {
+                    setLatest(initial);
+                }
+            } catch (error) {
+                console.warn('[LinkMe Example] Failed to read initial link', error);
+            }
+        })();
+
+        const subscription = onLink((payload: LinkMePayload) => {
+            setLatest(payload);
+        });
+
+        return () => {
+            active = false;
+            subscription.remove();
+        };
+    }, []);
 
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.title}>LinkMe React Native (Expo Router) Example</Text>
                 <Text style={styles.status}>Status: Ready</Text>
-                <Text style={styles.section}>Latest Link: {JSON.stringify(latest) || 'none'}</Text>
+                <Text style={styles.section}>Latest Link: {latest ? JSON.stringify(latest) : 'none'}</Text>
                 <View style={styles.row}>
                     <Button
                         title="Accept Consent"

@@ -1,4 +1,4 @@
-import { NativeEventEmitter } from 'react-native';
+import { Linking } from 'react-native';
 export type LinkMePayload = {
     linkId?: string;
     path?: string;
@@ -15,6 +15,13 @@ export type LinkMeConfig = {
     includeVendorId?: boolean;
     includeAdvertisingId?: boolean;
 };
+type Listener = (payload: LinkMePayload) => void;
+type LinkingLike = typeof Linking;
+type FetchLike = typeof fetch;
+type ControllerDeps = {
+    fetchImpl?: FetchLike;
+    linking?: LinkingLike;
+};
 export declare function configure(config: LinkMeConfig): Promise<void>;
 export declare function getInitialLink(): Promise<LinkMePayload | null>;
 export declare function handleUrl(url: string): Promise<boolean>;
@@ -23,24 +30,21 @@ export declare function setUserId(userId: string): Promise<void>;
 export declare function setAdvertisingConsent(granted: boolean): Promise<void>;
 export declare function setReady(): Promise<void>;
 export declare function track(event: string, properties?: Record<string, any>): Promise<void>;
-export declare function onLink(listener: (payload: LinkMePayload) => void): {
+export declare function onLink(listener: Listener): {
     remove: () => void;
 };
 export declare class LinkMeClient {
-    private readonly module;
-    private readonly emitter;
-    constructor(deps?: {
-        module?: any;
-        emitter?: NativeEventEmitter;
-    });
+    private readonly controller;
+    constructor(deps?: ControllerDeps);
     configure(config: LinkMeConfig): Promise<void>;
     getInitialLink(): Promise<LinkMePayload | null>;
+    handleUrl(url: string): Promise<boolean>;
     claimDeferredIfAvailable(): Promise<LinkMePayload | null>;
     setUserId(userId: string): Promise<void>;
     setAdvertisingConsent(granted: boolean): Promise<void>;
     setReady(): Promise<void>;
     track(event: string, properties?: Record<string, any>): Promise<void>;
-    onLink(listener: (payload: LinkMePayload) => void): {
+    onLink(listener: Listener): {
         remove: () => void;
     };
 }

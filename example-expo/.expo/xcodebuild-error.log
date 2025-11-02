@@ -1,9 +1,2 @@
-2025-11-02 22:37:40.442 xcodebuild[62888:81658924]  DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
-2025-11-02 22:37:40.442 xcodebuild[62888:81658870] [MT] DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
-** BUILD FAILED **
-
-
-The following build commands failed:
-	CompileC /Users/tomasradvansky/Library/Developer/Xcode/DerivedData/LinkMeRNExample-azistpqvzntuggbmgknmvoumzxwx/Build/Intermediates.noindex/LinkMeRNExample.build/Debug-iphoneos/LinkMeRNExample.build/Objects-normal/arm64/AppDelegate.o /Users/tomasradvansky/Documents/RDEV-LIMITED/link-me/sdks/react-native/example-expo/ios/LinkMeRNExample/AppDelegate.mm normal arm64 objective-c++ com.apple.compilers.llvm.clang.1_0.compiler (in target 'LinkMeRNExample' from project 'LinkMeRNExample')
-	Building workspace LinkMeRNExample with scheme LinkMeRNExample and configuration Debug
-(2 failures)
+2025-11-02 23:16:28.056 xcodebuild[33225:81836494]  DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+2025-11-02 23:16:28.056 xcodebuild[33225:81836471] [MT] DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
