@@ -6,7 +6,7 @@
 npm install @linkme/react-native-sdk
 ```
 
-> The SDK is implemented entirely in TypeScript; no native modules or platform-specific code is required.
+> The SDK is implemented entirely in TypeScript; no native modules or platform-specific code is required. It uses React Native's built-in `Linking` API for deep link handling.
 
 ## Basic Setup (Expo Router)
 
@@ -21,7 +21,7 @@ npm install @linkme/react-native-sdk
         "@linkme/react-native-sdk/plugin/app.plugin.js",
         {
           "hosts": ["your-domain.li-nk.me"],
-          "associatedDomains": ["applinks:your-domain.li-nk.me"],
+          "associatedDomains": ["your-domain.li-nk.me"],
           "schemes": ["your-app-scheme"]
         }
       ]
@@ -40,7 +40,7 @@ npm install @linkme/react-native-sdk
 
 ```typescript
 // app/_layout.tsx
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import {
     configure,
@@ -56,9 +56,10 @@ export default function RootLayout() {
     const router = useRouter();
     const unsubRef = useRef<{ remove: () => void } | null>(null);
     const initializedRef = useRef(false);
+    const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        // Prevent double initialization
+        // Prevent double initialization in React strict mode
         if (initializedRef.current) return;
         initializedRef.current = true;
 
@@ -69,33 +70,37 @@ export default function RootLayout() {
                     baseUrl: 'https://your-domain.li-nk.me',
                     appId: 'your-app-id',
                     appKey: 'your-app-key',
+                    enablePasteboard: false,
+                    sendDeviceInfo: true,
+                    includeVendorId: true,
+                    includeAdvertisingId: false,
                 });
 
                 // Step 2: Listen for deep links
                 unsubRef.current = onLink((payload: LinkMePayload) => {
                     if (payload.path) {
-                        const path = payload.path.startsWith('/') 
+                        const targetPath = payload.path.startsWith('/') 
                             ? payload.path 
                             : `/${payload.path}`;
-                        router.replace(path as any);
+                        router.replace(targetPath as any);
                     }
                 });
 
                 // Step 3: Check for initial link
                 const initial = await getInitialLink();
                 if (initial?.path) {
-                    const path = initial.path.startsWith('/') 
+                    const targetPath = initial.path.startsWith('/') 
                         ? initial.path 
                         : `/${initial.path}`;
-                    router.replace(path as any);
+                    router.replace(targetPath as any);
                 } else {
                     // Step 4: Check for deferred link
                     const deferred = await claimDeferredIfAvailable();
                     if (deferred?.path) {
-                        const path = deferred.path.startsWith('/') 
+                        const targetPath = deferred.path.startsWith('/') 
                             ? deferred.path 
                             : `/${deferred.path}`;
-                        router.replace(path as any);
+                        router.replace(targetPath as any);
                     }
                 }
 
@@ -103,6 +108,8 @@ export default function RootLayout() {
                 await track('open');
             } catch (error) {
                 console.error('LinkMe initialization error:', error);
+            } finally {
+                setIsReady(true);
             }
         })();
 
@@ -111,8 +118,16 @@ export default function RootLayout() {
         };
     }, []);
 
+    if (!isReady) {
+        return null;
+    }
+
     return (
-        <Stack>
+        <Stack
+            screenOptions={{
+                headerShown: true,
+            }}
+        >
             <Stack.Screen name="index" options={{ title: 'Home' }} />
             <Stack.Screen name="profile" options={{ title: 'Profile' }} />
             {/* Add your other screens */}
