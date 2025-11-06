@@ -67,7 +67,6 @@ export default function RootLayout() {
             try {
                 // Step 1: Configure SDK
                 await configure({
-                    baseUrl: 'https://your-domain.li-nk.me',
                     appId: 'your-app-id',
                     appKey: 'your-app-key',
                     enablePasteboard: false,
@@ -143,7 +142,6 @@ Initialize the SDK with your configuration.
 
 ```typescript
 await configure({
-    baseUrl: 'https://your-domain.li-nk.me',
     appId: 'your-app-id',
     appKey: 'your-app-key',
     enablePasteboard: false,        // Optional

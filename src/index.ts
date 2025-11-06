@@ -9,7 +9,7 @@ export type LinkMePayload = {
 };
 
 export type LinkMeConfig = {
-    baseUrl: string;
+    baseUrl?: string;
     appId?: string;
     appKey?: string;
     enablePasteboard?: boolean;
@@ -372,10 +372,8 @@ class LinkMeController {
 }
 
 function normalizeConfig(config: LinkMeConfig): NormalizedConfig {
-    if (!config?.baseUrl) {
-        throw new Error('baseUrl is required');
-    }
-    const trimmed = config.baseUrl.replace(/\/$/, '');
+    const baseUrl = config?.baseUrl || 'https://li-nk.me';
+    const trimmed = baseUrl.replace(/\/$/, '');
     return {
         ...config,
         baseUrl: trimmed,
