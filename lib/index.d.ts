@@ -7,7 +7,7 @@ export type LinkMePayload = {
     custom?: Record<string, string>;
 };
 export type LinkMeConfig = {
-    baseUrl: string;
+    baseUrl?: string;
     appId?: string;
     appKey?: string;
     enablePasteboard?: boolean;
