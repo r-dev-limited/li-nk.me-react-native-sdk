@@ -43,7 +43,22 @@ export default function Index() {
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={styles.title}>LinkMe React Native (Expo Router) Example</Text>
                 <Text style={styles.status}>Status: Ready</Text>
-                <Text style={styles.section}>Latest Link: {latest ? JSON.stringify(latest) : 'none'}</Text>
+                <Text style={styles.section}>Latest Link Payload:</Text>
+                <View style={styles.debugBox}>
+                    <Text style={styles.debugText}>{latest ? JSON.stringify(latest, null, 2) : 'None'}</Text>
+                </View>
+
+                {latest?.utm && Object.keys(latest.utm).length > 0 && (
+                    <View style={[styles.debugBox, { borderColor: '#2196F3', backgroundColor: '#E3F2FD' }]}>
+                        <Text style={[styles.debugTitle, { color: '#1976D2' }]}>UTM Inspector</Text>
+                        {Object.entries(latest.utm).map(([key, value]) => (
+                            <View key={key} style={styles.paramRow}>
+                                <Text style={styles.paramKey}>{key}:</Text>
+                                <Text style={styles.paramValue}>{String(value)}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
                 <View style={styles.row}>
                     <Button
                         title="Accept Consent"
@@ -93,4 +108,35 @@ const styles = StyleSheet.create({
     section: { fontSize: 14 },
     row: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
     help: { color: '#666', fontSize: 12, marginTop: 16 },
+    debugBox: {
+        padding: 12,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        marginVertical: 8,
+    },
+    debugTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    debugText: {
+        fontSize: 12,
+        fontFamily: 'Menlo',
+    },
+    paramRow: {
+        flexDirection: 'row',
+        marginBottom: 4,
+    },
+    paramKey: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginRight: 8,
+        minWidth: 80,
+    },
+    paramValue: {
+        fontSize: 12,
+        flex: 1,
+    },
 });
