@@ -234,14 +234,28 @@ onLink((payload) => {
 ```
 
 ### Handle UTM Parameters
+LinkMe normalizes UTM parameters into a standard format. You can map these directly to your analytics provider (e.g., Firebase Analytics).
 
 ```typescript
+import analytics from '@react-native-firebase/analytics';
+
 onLink((payload) => {
     if (payload.utm) {
-        console.log('Campaign:', payload.utm.campaign);
-        console.log('Source:', payload.utm.source);
-        console.log('Medium:', payload.utm.medium);
-        // Store for analytics
+        // Log campaign details event
+        analytics().logEvent('campaign_details', {
+            source: payload.utm.source,
+            medium: payload.utm.medium,
+            campaign: payload.utm.campaign,
+            term: payload.utm.term,
+            content: payload.utm.content,
+        });
+
+        // Set default parameters for future events
+        analytics().setDefaultEventParameters({
+            source: payload.utm.source,
+            medium: payload.utm.medium,
+            campaign: payload.utm.campaign,
+        });
     }
 });
 ```

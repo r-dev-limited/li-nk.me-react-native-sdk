@@ -26,9 +26,9 @@ export default function RootLayout() {
         (async () => {
             try {
                 // Step 1: Configure the SDK
-                const baseUrl = 'https://0jk2u2h9.li-nk.me';
-                const appId = '0jk2u2h9';
-                const appKey = 'ak_CgJwMBftYHC_7_WU8i-zIQb4a3OXZ4yqazp87iF2uus';
+                const baseUrl = 'https://e0qcsxfc.li-nk.me';
+                const appId = 'e0qcsxfc';
+                const appKey = 'ak_nMqCl4QwFSVvjC5VrrAvTH0ziWH06WLhua6EtCvFO6o';
 
                 await configure({
                     baseUrl,
@@ -45,6 +45,19 @@ export default function RootLayout() {
                 // Step 2: Add listener for payloads
                 unsubRef.current = onLink((payload: LinkMePayload) => {
                     console.log('[LinkMe Example] Received payload:', payload);
+
+                    // Example: Map to Firebase Analytics
+                    /*
+                    if (payload.utm) {
+                        analytics().logEvent('campaign_details', {
+                            source: payload.utm.source,
+                            medium: payload.utm.medium,
+                            campaign: payload.utm.campaign,
+                            term: payload.utm.term,
+                            content: payload.utm.content,
+                        });
+                    }
+                    */
 
                     if (payload.path) {
                         const targetPath = payload.path.startsWith('/') ? payload.path : `/${payload.path}`;
