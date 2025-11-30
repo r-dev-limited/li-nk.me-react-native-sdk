@@ -1,5 +1,14 @@
 import { Linking, Platform } from 'react-native';
 
+// Optional expo-clipboard for pasteboard support on iOS
+let Clipboard: { getStringAsync?: () => Promise<string> } | null = null;
+try {
+    // Dynamic import to make expo-clipboard optional
+    Clipboard = require('expo-clipboard');
+} catch {
+    // expo-clipboard not installed - pasteboard will be skipped
+}
+
 export type LinkMePayload = {
     linkId?: string;
     path?: string;
@@ -12,6 +21,11 @@ export type LinkMeConfig = {
     baseUrl?: string;
     appId?: string;
     appKey?: string;
+    /**
+     * @deprecated Pasteboard is now controlled from the Portal (App Settings → iOS).
+     * The SDK automatically checks pasteboard on iOS if expo-clipboard is installed.
+     * This parameter is ignored.
+     */
     enablePasteboard?: boolean;
     sendDeviceInfo?: boolean;
     includeVendorId?: boolean;
@@ -101,6 +115,16 @@ class LinkMeController {
         if (!cfg) {
             return null;
         }
+
+        // 1. On iOS, try to read CID from pasteboard first (if expo-clipboard is available)
+        if (Platform.OS === 'ios' && Clipboard?.getStringAsync) {
+            const pasteboardPayload = await this.tryClaimFromPasteboard(cfg);
+            if (pasteboardPayload) {
+                return pasteboardPayload;
+            }
+        }
+
+        // 2. Fallback to probabilistic fingerprint matching
         try {
             const body: Record<string, any> = {
                 platform: Platform.OS,
@@ -122,6 +146,64 @@ class LinkMeController {
                 this.emit(payload);
             }
             return payload;
+        } catch {
+            return null;
+        }
+    }
+
+    private async tryClaimFromPasteboard(cfg: NormalizedConfig): Promise<LinkMePayload | null> {
+        try {
+            if (!Clipboard?.getStringAsync) {
+                return null;
+            }
+            const pasteStr = await Clipboard.getStringAsync();
+            if (!pasteStr) {
+                return null;
+            }
+            // Check if the clipboard contains a li-nk.me URL with a cid parameter
+            const cid = this.extractCidFromUrl(pasteStr, cfg.baseUrl);
+            if (!cid) {
+                return null;
+            }
+            // Resolve the CID to get the payload
+            const payload = await this.resolveCid(cfg, cid);
+            if (payload) {
+                this.emit(payload);
+                // Track pasteboard claim
+                this.track('claim', { claim_type: 'pasteboard' });
+            }
+            return payload;
+        } catch {
+            return null;
+        }
+    }
+
+    private extractCidFromUrl(str: string, baseUrl: string): string | null {
+        try {
+            const url = new URL(str);
+            // Check if the URL is from our domain
+            const baseHost = new URL(baseUrl).host;
+            if (!url.host.endsWith(baseHost) && url.host !== baseHost.replace(/^www\./, '')) {
+                return null;
+            }
+            // Extract the cid parameter
+            const cid = url.searchParams.get('cid');
+            return cid || null;
+        } catch {
+            return null;
+        }
+    }
+
+    private async resolveCid(cfg: NormalizedConfig, cid: string): Promise<LinkMePayload | null> {
+        try {
+            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/deeplink?cid=${encodeURIComponent(cid)}`, {
+                method: 'GET',
+                headers: this.buildHeaders(false),
+            });
+            if (!res.ok) {
+                return null;
+            }
+            return this.parsePayload(res);
         } catch {
             return null;
         }
