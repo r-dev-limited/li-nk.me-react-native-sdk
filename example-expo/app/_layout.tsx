@@ -34,7 +34,6 @@ export default function RootLayout() {
                     baseUrl,
                     appId,
                     appKey,
-                    enablePasteboard: false,
                     sendDeviceInfo: true,
                     includeVendorId: true,
                     includeAdvertisingId: false,

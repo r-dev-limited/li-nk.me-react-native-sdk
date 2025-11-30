@@ -14,6 +14,16 @@ Pure TypeScript React Native SDK for LinkMe — deep linking and attribution. No
 npm install @linkme/react-native-sdk
 ```
 
+### Optional: iOS Pasteboard Support
+
+For more reliable deferred deep linking on iOS, install `expo-clipboard`:
+
+```bash
+npx expo install expo-clipboard
+```
+
+When installed, the SDK will automatically check the iOS pasteboard for a li-nk.me URL before falling back to fingerprint matching. Pasteboard must also be enabled in the Portal (App Settings → iOS).
+
 ### Expo Configuration
 
 Add the config plugin to your `app.json` or `app.config.js`:
