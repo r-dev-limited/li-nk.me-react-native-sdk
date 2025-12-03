@@ -166,7 +166,7 @@ class LinkMeController {
                 return null;
             }
             // Resolve the CID to get the payload
-            const payload = await this.resolveCid(cfg, cid);
+            const payload = await this.resolveCidWithConfig(cfg, cid);
             if (payload) {
                 this.emit(payload);
                 // Track pasteboard claim
@@ -194,7 +194,7 @@ class LinkMeController {
         }
     }
 
-    private async resolveCid(cfg: NormalizedConfig, cid: string): Promise<LinkMePayload | null> {
+    private async resolveCidWithConfig(cfg: NormalizedConfig, cid: string): Promise<LinkMePayload | null> {
         try {
             const res = await this.fetchImpl(`${cfg.apiBaseUrl}/deeplink?cid=${encodeURIComponent(cid)}`, {
                 method: 'GET',

@@ -4,9 +4,9 @@ Pure TypeScript React Native SDK for LinkMe — deep linking and attribution. No
 
 - Quick Start: See `QUICK_START.md`
 - Repo docs: ../../docs/help/docs/setup/react-native.md
-- Hosted docs: https://li-nk.me/help/setup/react-native
+- Hosted docs: https://li-nk.me/resources/developer/setup/react-native
 - Example app: See `example-expo/` directory
-- Android troubleshooting: See [Android Troubleshooting](https://li-nk.me/help/setup/android#troubleshooting) section in Android setup docs
+- Android troubleshooting: See [Android Troubleshooting](https://li-nk.me/resources/developer/setup/android#troubleshooting) section in Android setup docs
 
 ## Installation
 

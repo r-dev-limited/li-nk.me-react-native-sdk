@@ -334,7 +334,7 @@ adb shell am start -W -a android.intent.action.VIEW \
 
 ## Support
 
-- Documentation: https://li-nk.me/help/setup/react-native
+- Documentation: https://li-nk.me/resources/developer/setup/react-native
 - Issues: Check FIXES.md and TESTING_CHECKLIST.md
 - Example: See `example-expo/` directory
 
