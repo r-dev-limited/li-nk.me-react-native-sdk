@@ -11,7 +11,7 @@ Pure TypeScript React Native SDK for LinkMe — deep linking and attribution. No
 ## Installation
 
 ```bash
-npm install @linkme/react-native-sdk
+npm install @li-nk.me/react-native-sdk
 ```
 
 ### Optional: iOS Pasteboard Support
@@ -33,7 +33,7 @@ Add the config plugin to your `app.json` or `app.config.js`:
   "expo": {
     "plugins": [
       [
-        "@linkme/react-native-sdk/plugin/app.plugin.js",
+        "@li-nk.me/react-native-sdk/plugin/app.plugin.js",
         {
           "hosts": ["link.example.com"],
           "associatedDomains": ["applinks:link.example.com"],
@@ -50,7 +50,7 @@ Add the config plugin to your `app.json` or `app.config.js`:
 Initialize the SDK in your root layout (e.g., `app/_layout.tsx`):
 
 ```typescript
-import { configure, onLink, getInitialLink, claimDeferredIfAvailable, track } from '@linkme/react-native-sdk';
+import { configure, onLink, getInitialLink, claimDeferredIfAvailable, track } from '@li-nk.me/react-native-sdk';
 
 // ... inside your component
 useEffect(() => {

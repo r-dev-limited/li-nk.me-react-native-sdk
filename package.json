@@ -1,5 +1,5 @@
 {
-    "name": "@linkme/react-native-sdk",
+    "name": "@li-nk.me/react-native-sdk",
     "version": "0.1.1",
     "description": "Pure TypeScript React Native SDK for LinkMe deep and deferred links.",
     "main": "lib/index.js",
@@ -39,6 +39,9 @@
         "expo-clipboard": {
             "optional": true
         }
+    },
+    "publishConfig": {
+        "access": "public"
     },
     "dependencies": {
         "@expo/config-plugins": "^8.0.0"

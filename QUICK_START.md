@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-npm install @linkme/react-native-sdk
+npm install @li-nk.me/react-native-sdk
 ```
 
 > The SDK is implemented entirely in TypeScript; no native modules or platform-specific code is required. It uses React Native's built-in `Linking` API for deep link handling.
@@ -18,7 +18,7 @@ npm install @linkme/react-native-sdk
     "scheme": "your-app-scheme",
     "plugins": [
       [
-        "@linkme/react-native-sdk/plugin/app.plugin.js",
+        "@li-nk.me/react-native-sdk/plugin/app.plugin.js",
         {
           "hosts": ["your-domain.li-nk.me"],
           "associatedDomains": ["your-domain.li-nk.me"],
@@ -49,7 +49,7 @@ import {
     claimDeferredIfAvailable,
     track,
     LinkMePayload,
-} from '@linkme/react-native-sdk';
+} from '@li-nk.me/react-native-sdk';
 import { useRouter } from 'expo-router';
 
 export default function RootLayout() {

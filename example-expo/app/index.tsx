@@ -8,7 +8,7 @@ import {
     setReady,
     track,
     LinkMePayload,
-} from '@linkme/react-native-sdk';
+} from '@li-nk.me/react-native-sdk';
 import { useEffect, useState } from 'react';
 
 export default function Index() {

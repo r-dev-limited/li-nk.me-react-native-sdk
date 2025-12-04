@@ -10,7 +10,7 @@
         "prebuild": "expo prebuild"
     },
     "dependencies": {
-        "@linkme/react-native-sdk": "file:..",
+        "@li-nk.me/react-native-sdk": "file:..",
         "expo": "~52.0.0",
         "expo-asset": "~11.0.0",
         "expo-clipboard": "~8.0.0",
