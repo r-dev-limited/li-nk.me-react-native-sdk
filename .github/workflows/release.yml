@@ -51,7 +51,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       - name: Ensure latest npm for trusted publishing
         run: npm install -g npm@latest
