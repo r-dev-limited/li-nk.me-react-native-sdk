@@ -40,10 +40,14 @@
             "optional": true
         }
     },
+    "publishConfig": {
+        "access": "public"
+    },
     "dependencies": {
         "@expo/config-plugins": "^8.0.0"
     },
     "devDependencies": {
+        "@types/node": "^20.12.7",
         "rimraf": "^5.0.0",
         "typescript": "^5.4.0"
     }

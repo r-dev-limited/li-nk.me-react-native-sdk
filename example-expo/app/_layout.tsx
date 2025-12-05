@@ -7,7 +7,7 @@ import {
     claimDeferredIfAvailable,
     track,
     LinkMePayload,
-} from '@linkme/react-native-sdk';
+} from '@li-nk.me/react-native-sdk';
 import { useRouter } from 'expo-router';
 
 export default function RootLayout() {

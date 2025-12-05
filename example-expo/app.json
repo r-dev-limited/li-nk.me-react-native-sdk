@@ -9,7 +9,7 @@
     "plugins": [
       "expo-dev-client",
       [
-        "@linkme/react-native-sdk/plugin/app.plugin.js",
+        "@li-nk.me/react-native-sdk/plugin/app.plugin.js",
         {
           "hosts": [
             "e0qcsxfc.li-nk.me"
