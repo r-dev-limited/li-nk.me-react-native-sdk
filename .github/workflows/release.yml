@@ -88,5 +88,5 @@ jobs:
         run: npm run build
 
       - name: Publish
-        run: npm publish --access public --provenance
+        run: npm publish --access public
 
