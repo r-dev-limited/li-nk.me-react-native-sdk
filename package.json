@@ -1,5 +1,5 @@
 {
-    "name": "@linkme/react-native-sdk",
+    "name": "@li-nk.me/react-native-sdk",
     "version": "0.2.0",
     "description": "Pure TypeScript React Native SDK for LinkMe deep and deferred links.",
     "main": "lib/index.js",
@@ -24,6 +24,10 @@
         "sdk"
     ],
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/r-dev-limited/li-nk.me-react-native-sdk"
+    },
     "peerDependencies": {
         "react": ">=18",
         "react-native": ">=0.72.0",
