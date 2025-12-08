@@ -21,6 +21,7 @@ export type LinkMeConfig = {
     baseUrl?: string;
     appId?: string;
     appKey?: string;
+    debug?: boolean;
     /**
      * @deprecated Pasteboard is now controlled from the Portal (App Settings → iOS).
      * The SDK automatically checks pasteboard on iOS if expo-clipboard is installed.
@@ -52,6 +53,7 @@ class LinkMeController {
     private config: NormalizedConfig | undefined;
     private ready = false;
     private advertisingConsent = false;
+    private debug = false;
     private userId: string | undefined;
     private lastPayload: LinkMePayload | null = null;
     private readonly listeners = new Set<Listener>();
@@ -74,6 +76,9 @@ class LinkMeController {
         const normalized = normalizeConfig(config);
         this.config = normalized;
         this.advertisingConsent = !!config.includeAdvertisingId;
+        const fallbackDev = Boolean((globalThis as any)?.__DEV__);
+        this.debug = normalized.debug ?? fallbackDev;
+        this.logDebug('configure', { baseUrl: normalized.baseUrl, debug: this.debug });
         this.subscribeToLinking();
         this.ready = true;
         await this.drainPending();
@@ -113,15 +118,20 @@ class LinkMeController {
     async claimDeferredIfAvailable(): Promise<LinkMePayload | null> {
         const cfg = this.config;
         if (!cfg) {
+            this.logDebug('deferred.skip_no_config');
             return null;
         }
+        this.logDebug('deferred.claim.start', { platform: Platform.OS });
 
         // 1. On iOS, try to read CID from pasteboard first (if expo-clipboard is available)
         if (Platform.OS === 'ios' && Clipboard?.getStringAsync) {
+            this.logDebug('deferred.pasteboard.check');
             const pasteboardPayload = await this.tryClaimFromPasteboard(cfg);
             if (pasteboardPayload) {
+                this.logDebug('deferred.pasteboard.payload');
                 return pasteboardPayload;
             }
+            this.logDebug('deferred.pasteboard.no_match');
         }
 
         // 2. Fallback to probabilistic fingerprint matching
@@ -133,20 +143,26 @@ class LinkMeController {
             if (device) {
                 body.device = device;
             }
+            this.logDebug('deferred.fingerprint.request');
             const res = await this.fetchImpl(`${cfg.apiBaseUrl}/deferred/claim`, {
                 method: 'POST',
                 headers: this.buildHeaders(true),
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
+                this.logDebug('deferred.fingerprint.http_error', { status: res.status });
                 return null;
             }
             const payload = await this.parsePayload(res);
             if (payload) {
+                this.logDebug('deferred.fingerprint.payload', { linkId: payload.linkId, duplicate: (payload as any)?.duplicate });
                 this.emit(payload);
+            } else {
+                this.logDebug('deferred.fingerprint.no_match');
             }
             return payload;
-        } catch {
+        } catch (err) {
+            this.logDebug('deferred.fingerprint.error', { message: err instanceof Error ? err.message : String(err) });
             return null;
         }
     }
@@ -154,26 +170,35 @@ class LinkMeController {
     private async tryClaimFromPasteboard(cfg: NormalizedConfig): Promise<LinkMePayload | null> {
         try {
             if (!Clipboard?.getStringAsync) {
+                this.logDebug('pasteboard.skip_module');
                 return null;
             }
+            this.logDebug('pasteboard.read');
             const pasteStr = await Clipboard.getStringAsync();
             if (!pasteStr) {
+                this.logDebug('pasteboard.empty');
                 return null;
             }
             // Check if the clipboard contains a li-nk.me URL with a cid parameter
             const cid = this.extractCidFromUrl(pasteStr, cfg.baseUrl);
             if (!cid) {
+                this.logDebug('pasteboard.no_cid', { hasClipboard: true });
                 return null;
             }
+            this.logDebug('pasteboard.cid_found');
             // Resolve the CID to get the payload
             const payload = await this.resolveCidWithConfig(cfg, cid);
             if (payload) {
                 this.emit(payload);
                 // Track pasteboard claim
-                this.track('claim', { claim_type: 'pasteboard' });
+                this.logDebug('pasteboard.payload', { linkId: payload.linkId });
+                void this.track('claim', { claim_type: 'pasteboard' });
+            } else {
+                this.logDebug('pasteboard.resolve_empty');
             }
             return payload;
-        } catch {
+        } catch (err) {
+            this.logDebug('pasteboard.error', { message: err instanceof Error ? err.message : String(err) });
             return null;
         }
     }
@@ -184,12 +209,19 @@ class LinkMeController {
             // Check if the URL is from our domain
             const baseHost = new URL(baseUrl).host;
             if (!url.host.endsWith(baseHost) && url.host !== baseHost.replace(/^www\./, '')) {
+                this.logDebug('pasteboard.url_mismatch', { host: url.host });
                 return null;
             }
             // Extract the cid parameter
             const cid = url.searchParams.get('cid');
+            if (cid) {
+                this.logDebug('pasteboard.url_cid_present');
+            } else {
+                this.logDebug('pasteboard.url_no_cid');
+            }
             return cid || null;
-        } catch {
+        } catch (err) {
+            this.logDebug('pasteboard.url_parse_error', { message: err instanceof Error ? err.message : String(err) });
             return null;
         }
     }
@@ -436,7 +468,8 @@ class LinkMeController {
         try {
             const json = (await res.json()) as LinkMePayload;
             return json ?? null;
-        } catch {
+        } catch (err) {
+            this.logDebug('payload.parse_error', { message: err instanceof Error ? err.message : String(err) });
             return null;
         }
     }
@@ -449,6 +482,21 @@ class LinkMeController {
             } catch {
                 /* noop */
             }
+        }
+    }
+
+    private logDebug(event: string, details?: Record<string, any>): void {
+        if (!this.debug) {
+            return;
+        }
+        try {
+            if (details) {
+                console.log(`[LinkMe SDK] ${event}`, details);
+            } else {
+                console.log(`[LinkMe SDK] ${event}`);
+            }
+        } catch {
+            /* noop */
         }
     }
 }

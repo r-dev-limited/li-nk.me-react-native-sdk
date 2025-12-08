@@ -20,10 +20,17 @@ import { configure } from '@linkme/react-native-sdk';
 await configure({
   appId: 'your_app_id',
   appKey: 'your_app_key',
+  debug: __DEV__, // Optional: surface verbose logs for deferred/pasteboard flows
 });
 ```
 
 For full documentation, guides, and API reference, please visit our [Help Center](https://li-nk.me/docs/help).
+
+## Debugging Deferred Links
+
+- Pass `debug: true` (or `__DEV__`) to `configure` to emit `[LinkMe SDK]` logs for pasteboard and fingerprint claims.
+- Check that Expo Clipboard is installed if you expect pasteboard-based iOS claims.
+- Review server logs for `/api/deferred/claim` to verify fingerprint matches.
 
 ## License
 

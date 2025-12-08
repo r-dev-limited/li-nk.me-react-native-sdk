@@ -10,6 +10,7 @@ export type LinkMeConfig = {
     baseUrl?: string;
     appId?: string;
     appKey?: string;
+    debug?: boolean;
     /**
      * @deprecated Pasteboard is now controlled from the Portal (App Settings → iOS).
      * The SDK automatically checks pasteboard on iOS if expo-clipboard is installed.
