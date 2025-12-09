@@ -277,10 +277,13 @@ class LinkMeController {
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
-                await res.text().catch(() => undefined);
+                const text = await res.text().catch(() => undefined);
+                this.logDebug('app_events.http_error', { status: res.status, body: text });
+                console.warn('[LinkMe SDK] app_events.http_error', { status: res.status, body: text });
             }
         } catch {
-            /* noop */
+            this.logDebug('app_events.network_error');
+            console.warn('[LinkMe SDK] app_events.network_error');
         }
     }
 

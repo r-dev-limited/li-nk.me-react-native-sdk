@@ -1,0 +1,48 @@
+appId: me.link.example
+---
+- launchApp:
+    permissions:
+      userTracking: allowed
+- openLink: ${DEV_CLIENT_URL}
+- runFlow:
+    when:
+      visible: "Open"
+    commands:
+      - tapOn: "Open"
+- runFlow:
+    when:
+      visible: "Don’t Allow Paste"
+    commands:
+      - tapOn: "Don’t Allow Paste"
+- runFlow:
+    when:
+      visible: "Don't Allow Paste"
+    commands:
+      - tapOn: "Don't Allow Paste"
+# Fallback if text differs slightly (e.g. "Don't Allow")
+- runFlow:
+    when:
+      visible: "Don’t Allow"
+    commands:
+      - tapOn: "Don’t Allow"
+# Dismiss Expo Dev Menu if visible
+- runFlow:
+    when:
+      visible: "Toggle performance monitor"
+    commands:
+      - tapOn:
+          point: "50%,10%"
+# Wait for SDK to initialize
+- extendedWaitUntil:
+    visible:
+      id: "home-status"
+      text: "Status: Ready"
+    timeout: 30000
+# Verify Home Screen
+- assertVisible:
+    id: "home-title"
+# Verify Deferred Link (Check if the displayed Link ID matches the environment variable)
+# This confirms Fingerprinting worked because Pasteboard was denied
+- assertVisible:
+    id: "latest-link-id"
+    text: "${LINK_ID}"

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
+import { Text, View } from 'react-native';
 import {
     configure,
     getInitialLink,
@@ -21,15 +22,22 @@ export default function RootLayout() {
         if (initializedRef.current) return;
         initializedRef.current = true;
 
-        console.log('[LinkMe Example] Initializing LinkMe SDK');
+        const baseUrl = process.env.EXPO_PUBLIC_LINKME_BASE_URL || 'https://e0qcsxfc.li-nk.me';
+        const appId = process.env.EXPO_PUBLIC_LINKME_APP_ID || 'e0qcsxfc';
+        const appKey = process.env.EXPO_PUBLIC_LINKME_APP_KEY || 'ak_nMqCl4QwFSVvjC5VrrAvTH0ziWH06WLhua6EtCvFO6o';
+        const debug = String(process.env.EXPO_PUBLIC_LINKME_DEBUG || 'true').toLowerCase() !== 'false';
+
+        console.log('[LinkMe Example] Initializing LinkMe SDK', {
+            baseUrl,
+            appId,
+            hasKey: Boolean(appKey),
+            debug,
+            includeAdvertisingId: false,
+        });
 
         (async () => {
             try {
                 // Step 1: Configure the SDK
-                const baseUrl = 'https://e0qcsxfc.li-nk.me';
-                const appId = 'e0qcsxfc';
-                const appKey = 'ak_nMqCl4QwFSVvjC5VrrAvTH0ziWH06WLhua6EtCvFO6o';
-
                 await configure({
                     baseUrl,
                     appId,
@@ -37,6 +45,7 @@ export default function RootLayout() {
                     sendDeviceInfo: true,
                     includeVendorId: true,
                     includeAdvertisingId: false,
+                    debug,
                 });
 
                 console.log('[LinkMe Example] SDK configured');
@@ -78,13 +87,14 @@ export default function RootLayout() {
                 } else {
                     // Step 4: If no initial link, check for deferred link
                     console.log('[LinkMe Example] No initial link, checking deferred');
+                    console.log('[LinkMe Example] Invoking claimDeferredIfAvailable');
                     const deferred = await claimDeferredIfAvailable();
                     console.log('[LinkMe Example] Deferred link:', deferred);
 
                     if (deferred?.path) {
                         const targetPath = deferred.path.startsWith('/') ? deferred.path : `/${deferred.path}`;
                         console.log('[LinkMe Example] Navigating to deferred path:', targetPath);
-                        router.replace(targetPath as any);
+                        router.replace({ pathname: targetPath as any, params: deferred });
                     }
                 }
 
@@ -95,6 +105,7 @@ export default function RootLayout() {
                 console.error('[LinkMe Example] Initialization error:', error);
             } finally {
                 setIsReady(true);
+                console.log('[LinkMe Example] Ready flag set');
             }
         })();
 
@@ -109,14 +120,16 @@ export default function RootLayout() {
     }
 
     return (
-        <Stack
-            screenOptions={{
-                headerShown: true,
-            }}
-        >
-            <Stack.Screen name="index" options={{ title: 'Home' }} />
-            <Stack.Screen name="profile" options={{ title: 'Profile' }} />
-            <Stack.Screen name="settings" options={{ title: 'Settings' }} />
-        </Stack>
+        <View style={{ flex: 1 }}>
+            <Stack
+                screenOptions={{
+                    headerShown: true,
+                }}
+            >
+                <Stack.Screen name="index" options={{ title: 'Home' }} />
+                <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+                <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+            </Stack>
+        </View>
     );
 }

@@ -5,4 +5,7 @@ node_modules/
 **/ios/build/
 **/ios/Pods/
 **/ios/DerivedData/
-
+artifacts/
+example-expo/artifacts/
+lib/
+*.log

@@ -1,0 +1,56 @@
+appId: me.link.example
+---
+- launchApp:
+    # We manage state manually in the runner (uninstall -> install)
+    # clearState: true # Removed to prevent "No such file" SimctlError
+    permissions:
+      userTracking: allowed
+- openLink: ${DEV_CLIENT_URL}
+- runFlow:
+    when:
+      visible: "Open"
+    commands:
+      - tapOn: "Open"
+- runFlow:
+    when:
+      visible: "Allow Paste"
+    commands:
+      - tapOn: "Allow Paste"
+# Dismiss Expo Dev Menu if visible (check for unique menu item)
+- runFlow:
+    when:
+      visible: "Toggle performance monitor"
+    commands:
+      - tapOn:
+          point: "50%,10%"
+# Wait for SDK to initialize
+- extendedWaitUntil:
+    visible:
+      id: "home-status"
+      text: "Status: Ready"
+    timeout: 30000
+# Verify Home Screen
+- assertVisible:
+    id: "home-title"
+- assertVisible:
+    id: "latest-payload"
+- tapOn:
+    id: "button-go-profile"
+- assertVisible:
+    id: "profile-title"
+- tapOn:
+    id: "button-profile-back-home"
+- assertVisible:
+    id: "home-title"
+- tapOn:
+    id: "button-go-settings"
+- assertVisible:
+    id: "settings-title"
+- tapOn:
+    id: "button-settings-back-home"
+- assertVisible:
+    id: "home-title"
+# Verify Deferred Link (Check if the displayed Link ID matches the environment variable)
+- assertVisible:
+    id: "latest-link-id"
+    text: "${LINK_ID}"
