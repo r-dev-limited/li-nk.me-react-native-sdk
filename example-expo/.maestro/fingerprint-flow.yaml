@@ -1,8 +1,6 @@
 appId: me.link.example
 ---
-- launchApp:
-    permissions:
-      userTracking: allowed
+# Open the dev client URL directly (this will launch the app and connect to Metro)
 - openLink: ${DEV_CLIENT_URL}
 - runFlow:
     when:

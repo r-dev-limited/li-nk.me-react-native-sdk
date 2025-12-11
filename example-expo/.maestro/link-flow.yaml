@@ -1,10 +1,6 @@
 appId: me.link.example
 ---
-- launchApp:
-    # We manage state manually in the runner (uninstall -> install)
-    # clearState: true # Removed to prevent "No such file" SimctlError
-    permissions:
-      userTracking: allowed
+# Open the dev client URL directly (this will launch the app and connect to Metro)
 - openLink: ${DEV_CLIENT_URL}
 - runFlow:
     when:
