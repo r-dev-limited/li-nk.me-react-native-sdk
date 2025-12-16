@@ -6,7 +6,8 @@
 npm install @li-nk.me/react-native-sdk
 ```
 
-> The SDK is implemented entirely in TypeScript; no native modules or platform-specific code is required. It uses React Native's built-in `Linking` API for deep link handling.
+> The SDK uses React Native's built-in `Linking` API for deep link handling.
+> On Android, the SDK also supports **Play Install Referrer** for deterministic deferred linking.
 
 ## Basic Setup (Expo Router)
 
@@ -69,7 +70,6 @@ export default function RootLayout() {
                 await configure({
                     appId: 'your-app-id',
                     appKey: 'your-app-key',
-                    enablePasteboard: false,
                     sendDeviceInfo: true,
                     includeVendorId: true,
                     includeAdvertisingId: false,
@@ -144,7 +144,6 @@ Initialize the SDK with your configuration.
 await configure({
     appId: 'your-app-id',
     appKey: 'your-app-key',
-    enablePasteboard: false,        // Optional
     sendDeviceInfo: true,           // Optional
     includeVendorId: true,          // Optional
     includeAdvertisingId: false,    // Optional
@@ -183,6 +182,10 @@ if (payload?.path) {
     router.push(payload.path);
 }
 ```
+
+#### Deferred claim order
+- Android: **Install Referrer** → fingerprint fallback
+- iOS: pasteboard (when enabled in Portal + `expo-clipboard` installed) → fingerprint fallback
 
 ### track(event, properties?)
 Track custom events.
@@ -341,4 +344,3 @@ adb shell am start -W -a android.intent.action.VIEW \
 ## License
 
 MIT
-

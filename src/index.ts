@@ -1,4 +1,5 @@
 import { Linking, Platform } from 'react-native';
+import { NativeModules } from 'react-native';
 
 // Optional expo-clipboard for pasteboard support on iOS
 let Clipboard: { getStringAsync?: () => Promise<string> } | null = null;
@@ -123,6 +124,16 @@ class LinkMeController {
         }
         this.logDebug('deferred.claim.start', { platform: Platform.OS });
 
+        // 0. Android: deterministic claim via Play Install Referrer (if available)
+        if (Platform.OS === 'android') {
+            const referrerPayload = await this.tryClaimFromInstallReferrer(cfg);
+            if (referrerPayload) {
+                this.logDebug('deferred.install_referrer.payload');
+                return referrerPayload;
+            }
+            this.logDebug('deferred.install_referrer.no_match');
+        }
+
         // 1. On iOS, try to read CID from pasteboard first (if expo-clipboard is available)
         if (Platform.OS === 'ios' && Clipboard?.getStringAsync) {
             this.logDebug('deferred.pasteboard.check');
@@ -163,6 +174,43 @@ class LinkMeController {
             return payload;
         } catch (err) {
             this.logDebug('deferred.fingerprint.error', { message: err instanceof Error ? err.message : String(err) });
+            return null;
+        }
+    }
+
+    private async tryClaimFromInstallReferrer(cfg: NormalizedConfig): Promise<LinkMePayload | null> {
+        try {
+            const mod: any = (NativeModules as any)?.LinkMeInstallReferrer;
+            const getReferrer = mod?.getInstallReferrer;
+            if (typeof getReferrer !== 'function') {
+                this.logDebug('install_referrer.skip_module');
+                return null;
+            }
+            this.logDebug('install_referrer.read');
+            const referrer = String((await getReferrer()) || '').trim();
+            if (!referrer) {
+                this.logDebug('install_referrer.empty');
+                return null;
+            }
+
+            this.logDebug('install_referrer.request');
+            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/install-referrer`, {
+                method: 'POST',
+                headers: this.buildHeaders(true),
+                body: JSON.stringify({ referrer }),
+            });
+            if (!res.ok) {
+                this.logDebug('install_referrer.http_error', { status: res.status });
+                return null;
+            }
+            const payload = await this.parsePayload(res);
+            if (payload) {
+                this.emit(payload);
+                void this.track('claim', { claim_type: 'install_referrer' });
+            }
+            return payload;
+        } catch (err) {
+            this.logDebug('install_referrer.error', { message: err instanceof Error ? err.message : String(err) });
             return null;
         }
     }

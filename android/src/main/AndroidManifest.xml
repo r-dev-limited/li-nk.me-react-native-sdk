@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="com.linkme.rn">
+
+  <application>
+    <!-- Used for testing Install Referrer behavior via adb broadcast; also supports Play Store installs. -->
+    <receiver android:name=".LinkMeInstallReferrerReceiver" android:exported="true">
+      <intent-filter>
+        <action android:name="com.android.vending.INSTALL_REFERRER" />
+      </intent-filter>
+    </receiver>
+  </application>
+</manifest>
+

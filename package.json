@@ -1,7 +1,7 @@
 {
     "name": "@li-nk.me/react-native-sdk",
-    "version": "0.2.1",
-    "description": "Pure TypeScript React Native SDK for LinkMe deep and deferred links.",
+    "version": "0.2.3",
+    "description": "React Native SDK for LinkMe deep and deferred links.",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "react-native": "src/index.ts",
@@ -9,7 +9,9 @@
     "files": [
         "src",
         "lib",
-        "plugin"
+        "plugin",
+        "android",
+        "react-native.config.js"
     ],
     "scripts": {
         "build": "tsc -p tsconfig.json",

@@ -4,18 +4,18 @@ React Native SDK for LinkMe — deep linking and attribution.
 
 - **Main Site**: [li-nk.me](https://li-nk.me)
 - **Documentation**: [React Native Setup](https://li-nk.me/docs/developer/setup/react-native)
-- **Package**: [npm](https://www.npmjs.com/package/@linkme/react-native-sdk)
+- **Package**: [npm](https://www.npmjs.com/package/@li-nk.me/react-native-sdk)
 
 ## Installation
 
 ```bash
-npm install @linkme/react-native-sdk
+npm install @li-nk.me/react-native-sdk
 ```
 
 ## Basic Usage
 
 ```ts
-import { configure } from '@linkme/react-native-sdk';
+import { configure } from '@li-nk.me/react-native-sdk';
 
 await configure({
   appId: 'your_app_id',
@@ -30,8 +30,10 @@ For full documentation, guides, and API reference, please visit our [Help Center
 
 - Pass `debug: true` (or `__DEV__`) to `configure` to emit `[LinkMe SDK]` logs for pasteboard and fingerprint claims.
 - Check that Expo Clipboard is installed if you expect pasteboard-based iOS claims.
-- Review server logs for `/api/deferred/claim` to verify fingerprint matches.
+- Android deferred claims:
+  - **Install Referrer** (deterministic): `/api/install-referrer`
+  - **Fingerprint** (probabilistic fallback): `/api/deferred/claim`
 
 ## License
 
-Apache-2.0
+MIT

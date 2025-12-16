@@ -4,6 +4,7 @@ declare module 'react-native' {
         removeEventListener?: (event: 'url', listener: (ev: { url: string } | string) => void) => void;
         getInitialURL(): Promise<string | null>;
     };
+    export const NativeModules: Record<string, any>;
     export const Platform: {
         OS: string;
         Version?: string | number;
