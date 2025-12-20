@@ -1,6 +1,6 @@
 {
     "name": "@li-nk.me/react-native-sdk",
-    "version": "0.2.3",
+    "version": "0.2.4",
     "description": "React Native SDK for LinkMe deep and deferred links.",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",

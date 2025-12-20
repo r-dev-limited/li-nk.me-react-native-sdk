@@ -11,6 +11,7 @@ try {
 }
 
 export type LinkMePayload = {
+    cid?: string;
     linkId?: string;
     path?: string;
     params?: Record<string, string>;
@@ -308,16 +309,22 @@ class LinkMeController {
             return;
         }
         try {
+            const detail =
+                properties === undefined
+                    ? undefined
+                    : typeof properties === 'string'
+                        ? properties
+                        : JSON.stringify(properties);
             const body: Record<string, any> = {
-                event,
+                type: event,
+                cid: this.lastPayload?.cid,
+                linkId: this.lastPayload?.linkId,
+                detail,
                 platform: Platform.OS,
                 timestamp: Math.floor(Date.now() / 1000),
             };
             if (this.userId) {
                 body.userId = this.userId;
-            }
-            if (properties) {
-                body.props = properties;
             }
             const res = await this.fetchImpl(`${cfg.apiBaseUrl}/app-events`, {
                 method: 'POST',
