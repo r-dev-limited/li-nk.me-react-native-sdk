@@ -229,7 +229,7 @@ class LinkMeController {
                 return null;
             }
             // Check if the clipboard contains a li-nk.me URL with a cid parameter
-            const cid = this.extractCidFromUrl(pasteStr, cfg.baseUrl);
+            const cid = this.extractCidFromString(pasteStr);
             if (!cid) {
                 this.logDebug('pasteboard.no_cid', { hasClipboard: true });
                 return null;
@@ -252,27 +252,43 @@ class LinkMeController {
         }
     }
 
-    private extractCidFromUrl(str: string, baseUrl: string): string | null {
-        try {
-            const url = new URL(str);
-            // Check if the URL is from our domain
-            const baseHost = new URL(baseUrl).host;
-            if (!url.host.endsWith(baseHost) && url.host !== baseHost.replace(/^www\./, '')) {
-                this.logDebug('pasteboard.url_mismatch', { host: url.host });
-                return null;
-            }
-            // Extract the cid parameter
-            const cid = url.searchParams.get('cid');
-            if (cid) {
-                this.logDebug('pasteboard.url_cid_present');
-            } else {
-                this.logDebug('pasteboard.url_no_cid');
-            }
-            return cid || null;
-        } catch (err) {
-            this.logDebug('pasteboard.url_parse_error', { message: err instanceof Error ? err.message : String(err) });
+    private extractCidFromString(str: string): string | null {
+        const cleaned = String(str || '').trim();
+        if (!cleaned) {
             return null;
         }
+
+        // Preferred: explicit LinkMe clipboard token format.
+        // Example: "linkme:cid=6c9068d2c8ef8fdc"
+        const tokenMatch = cleaned.match(/(?:^|\s)linkme:cid=([a-fA-F0-9]{8,64})(?:\s|$)/);
+        if (tokenMatch?.[1]) {
+            this.logDebug('pasteboard.token_cid_present');
+            return tokenMatch[1];
+        }
+
+        // Typical: URL containing ?cid=... (host may be a branded domain / CNAME).
+        // If the clipboard contains extra text, try to find the first URL-like token.
+        const urlLike = cleaned.match(/https?:\/\/\S+/)?.[0] ?? cleaned;
+        try {
+            const url = new URL(urlLike);
+            const cid = url.searchParams.get('cid');
+            if (cid && /^[a-fA-F0-9]{8,64}$/.test(cid)) {
+                this.logDebug('pasteboard.url_cid_present', { host: url.host });
+                return cid;
+            }
+            this.logDebug('pasteboard.url_no_cid', { host: url.host });
+        } catch (err) {
+            this.logDebug('pasteboard.url_parse_error', { message: err instanceof Error ? err.message : String(err) });
+        }
+
+        // Last resort: raw query fragment containing cid=... anywhere in the clipboard.
+        const cidMatch = cleaned.match(/(?:^|[?&\s])cid=([a-fA-F0-9]{8,64})(?:$|[&\s])/);
+        if (cidMatch?.[1]) {
+            this.logDebug('pasteboard.raw_cid_present');
+            return cidMatch[1];
+        }
+
+        return null;
     }
 
     private async resolveCidWithConfig(cfg: NormalizedConfig, cid: string): Promise<LinkMePayload | null> {
