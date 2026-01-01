@@ -17,6 +17,8 @@ export type LinkMePayload = {
     params?: Record<string, string>;
     utm?: Record<string, string>;
     custom?: Record<string, string>;
+    url?: string;
+    isLinkMe?: boolean;
 };
 
 export type LinkMeConfig = {
@@ -50,6 +52,35 @@ type ControllerDeps = {
     fetchImpl?: FetchLike;
     linking?: LinkingLike;
 };
+
+const UTM_KEYS = new Set([
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+    'utm_id',
+    'utm_source_platform',
+    'utm_creative_format',
+    'utm_marketing_tactic',
+    'tags',
+]);
+
+function splitSearchParams(searchParams: URLSearchParams): { params?: Record<string, string>; utm?: Record<string, string> } {
+    const params: Record<string, string> = {};
+    const utm: Record<string, string> = {};
+    for (const [key, value] of searchParams.entries()) {
+        if (UTM_KEYS.has(key)) {
+            utm[key] = value;
+        } else {
+            params[key] = value;
+        }
+    }
+    return {
+        params: Object.keys(params).length ? params : undefined,
+        utm: Object.keys(utm).length ? utm : undefined,
+    };
+}
 
 class LinkMeController {
     private config: NormalizedConfig | undefined;
@@ -485,6 +516,13 @@ class LinkMeController {
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
+                const errorCode = await this.readErrorCode(res);
+                if (errorCode === 'domain_not_found') {
+                    const parsed = this.parseUrl(url);
+                    if (parsed) {
+                        return this.buildBasicUniversalPayload(parsed);
+                    }
+                }
                 return null;
             }
             return await this.parsePayload(res);
@@ -538,14 +576,40 @@ class LinkMeController {
         return device;
     }
 
-    private async parsePayload(res: Response): Promise<LinkMePayload | null> {
+    private async parsePayload(res: Response, assumeLinkMe = true): Promise<LinkMePayload | null> {
         try {
             const json = (await res.json()) as LinkMePayload;
-            return json ?? null;
+            if (!json) {
+                return null;
+            }
+            if (assumeLinkMe && json.isLinkMe === undefined) {
+                json.isLinkMe = true;
+            }
+            return json;
         } catch (err) {
             this.logDebug('payload.parse_error', { message: err instanceof Error ? err.message : String(err) });
             return null;
         }
+    }
+
+    private async readErrorCode(res: Response): Promise<string | undefined> {
+        try {
+            const data = (await res.json()) as { error?: unknown } | null;
+            return typeof data?.error === 'string' ? data.error : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    private buildBasicUniversalPayload(parsed: URL): LinkMePayload {
+        const { params, utm } = splitSearchParams(parsed.searchParams);
+        return {
+            path: parsed.pathname || '/',
+            params,
+            utm,
+            url: parsed.toString(),
+            isLinkMe: false,
+        };
     }
 
     private emit(payload: LinkMePayload): void {
