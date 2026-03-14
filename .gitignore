@@ -9,3 +9,5 @@ artifacts/
 example-expo/artifacts/
 lib/
 *.log
+
+example-expo/.expo/
