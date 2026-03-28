@@ -50,7 +50,6 @@ const sub = onLink((payload) => {
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `baseUrl` | `string` | `https://li-nk.me` | Your edge domain. |
 | `appId` | `string` | — | Required. |
 | `appKey` | `string` | — | Optional read-only key. |
 | `sendDeviceInfo` | `boolean` | `true` | Include device metadata. |
