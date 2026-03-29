@@ -19,6 +19,8 @@ export type LinkMePayload = {
     custom?: Record<string, string>;
     url?: string;
     isLinkMe?: boolean;
+    forceRedirectWeb?: boolean;
+    webFallbackUrl?: string;
 };
 
 export type LinkMeConfig = {
@@ -237,7 +239,9 @@ class LinkMeController {
             }
             const payload = await this.parsePayload(res);
             if (payload) {
-                this.emit(payload);
+                if (!(await this.maybeHandleForcedWebRedirect(payload))) {
+                    this.emit(payload);
+                }
                 void this.track('claim', { claim_type: 'install_referrer' });
             }
             return payload;
@@ -269,7 +273,9 @@ class LinkMeController {
             // Resolve the CID to get the payload
             const payload = await this.resolveCidWithConfig(cfg, cid);
             if (payload) {
-                this.emit(payload);
+                if (!(await this.maybeHandleForcedWebRedirect(payload))) {
+                    this.emit(payload);
+                }
                 // Track pasteboard claim
                 this.logDebug('pasteboard.payload', { linkId: payload.linkId });
                 void this.track('claim', { claim_type: 'pasteboard' });
@@ -458,7 +464,9 @@ class LinkMeController {
             payload = await this.resolveUniversalLink(url);
         }
         if (payload) {
-            this.emit(payload);
+            if (!(await this.maybeHandleForcedWebRedirect(payload))) {
+                this.emit(payload);
+            }
         }
         return payload;
     }
@@ -635,6 +643,25 @@ class LinkMeController {
             }
         } catch {
             /* noop */
+        }
+    }
+
+    private async maybeHandleForcedWebRedirect(payload: LinkMePayload): Promise<boolean> {
+        if (payload.forceRedirectWeb !== true) {
+            return false;
+        }
+        const target = String(payload.webFallbackUrl || '').trim();
+        if (!target) {
+            this.logDebug('force_web.enabled_but_missing_url', { linkId: payload.linkId });
+            return false;
+        }
+        try {
+            await this.linking?.openURL?.(target);
+            this.logDebug('force_web.browser_open', { linkId: payload.linkId, url: target });
+            return true;
+        } catch (err) {
+            this.logDebug('force_web.browser_open_failed', { message: err instanceof Error ? err.message : String(err), url: target });
+            return false;
         }
     }
 }
