@@ -2,7 +2,11 @@ import { Linking, Platform } from 'react-native';
 import { NativeModules } from 'react-native';
 
 // Optional expo-clipboard for pasteboard support on iOS
-let Clipboard: { getStringAsync?: () => Promise<string> } | null = null;
+let Clipboard: {
+    getStringAsync?: () => Promise<string>;
+    setStringAsync?: (text: string) => Promise<void>;
+    setString?: (text: string) => void;
+} | null = null;
 try {
     // Dynamic import to make expo-clipboard optional
     Clipboard = require('expo-clipboard');
@@ -264,7 +268,7 @@ class LinkMeController {
                 return null;
             }
             // Check if the clipboard contains a li-nk.me URL with a cid parameter
-            const cid = this.extractCidFromString(pasteStr);
+            const cid = this.extractCidFromString(pasteStr, cfg);
             if (!cid) {
                 this.logDebug('pasteboard.no_cid', { hasClipboard: true });
                 return null;
@@ -276,6 +280,7 @@ class LinkMeController {
                 if (!(await this.maybeHandleForcedWebRedirect(payload))) {
                     this.emit(payload);
                 }
+                await this.clearPasteboardCidIfPresent(cid);
                 // Track pasteboard claim
                 this.logDebug('pasteboard.payload', { linkId: payload.linkId });
                 void this.track('claim', { claim_type: 'pasteboard' });
@@ -289,7 +294,7 @@ class LinkMeController {
         }
     }
 
-    private extractCidFromString(str: string): string | null {
+    private extractCidFromString(str: string, cfg: NormalizedConfig): string | null {
         const cleaned = String(str || '').trim();
         if (!cleaned) {
             return null;
@@ -310,6 +315,10 @@ class LinkMeController {
             const url = new URL(urlLike);
             const cid = url.searchParams.get('cid');
             if (cid && /^[a-fA-F0-9]{8,64}$/.test(cid)) {
+                if (!this.isLikelyLinkMeHost(url.host, cfg)) {
+                    this.logDebug('pasteboard.url_non_linkme_host', { host: url.host });
+                    return null;
+                }
                 this.logDebug('pasteboard.url_cid_present', { host: url.host });
                 return cid;
             }
@@ -318,14 +327,45 @@ class LinkMeController {
             this.logDebug('pasteboard.url_parse_error', { message: err instanceof Error ? err.message : String(err) });
         }
 
-        // Last resort: raw query fragment containing cid=... anywhere in the clipboard.
-        const cidMatch = cleaned.match(/(?:^|[?&\s])cid=([a-fA-F0-9]{8,64})(?:$|[&\s])/);
-        if (cidMatch?.[1]) {
-            this.logDebug('pasteboard.raw_cid_present');
-            return cidMatch[1];
-        }
-
         return null;
+    }
+
+    private isLikelyLinkMeHost(host: string, cfg: NormalizedConfig): boolean {
+        const normalized = String(host || '').toLowerCase();
+        if (!normalized) {
+            return false;
+        }
+        if (normalized === 'li-nk.me' || normalized.endsWith('.li-nk.me')) {
+            return true;
+        }
+        try {
+            const configuredHost = new URL(cfg.baseUrl).host.toLowerCase();
+            return normalized === configuredHost;
+        } catch {
+            return false;
+        }
+    }
+
+    private async clearPasteboardCidIfPresent(cid: string): Promise<void> {
+        if (!cid || !Clipboard?.getStringAsync) {
+            return;
+        }
+        try {
+            const current = await Clipboard.getStringAsync();
+            if (!current || !current.includes(cid)) {
+                return;
+            }
+            if (Clipboard.setStringAsync) {
+                await Clipboard.setStringAsync('');
+            } else if (Clipboard.setString) {
+                Clipboard.setString('');
+            } else {
+                return;
+            }
+            this.logDebug('pasteboard.cleared_cid', { cid });
+        } catch (err) {
+            this.logDebug('pasteboard.clear_failed', { message: err instanceof Error ? err.message : String(err) });
+        }
     }
 
     private async resolveCidWithConfig(cfg: NormalizedConfig, cid: string): Promise<LinkMePayload | null> {

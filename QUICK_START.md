@@ -186,6 +186,8 @@ if (payload?.path) {
 #### Deferred claim order
 - Android: **Install Referrer** → fingerprint fallback
 - iOS: pasteboard (when enabled in Portal + `expo-clipboard` installed) → fingerprint fallback
+- iOS pasteboard sources are restricted to LinkMe token format (`linkme:cid=...`) or LinkMe hosts (`li-nk.me` / configured `baseUrl` host).
+- Successfully consumed pasteboard CIDs are removed from clipboard.
 
 ### track(event, properties?)
 Track custom events.

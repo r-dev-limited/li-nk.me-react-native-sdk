@@ -72,6 +72,8 @@ await client.configure({ appId: 'app_123' });
 
 - Pass `debug: true` (or `__DEV__`) to `configure` to emit `[LinkMe SDK]` logs for pasteboard and fingerprint claims.
 - Check that Expo Clipboard is installed if you expect pasteboard-based iOS claims.
+- iOS pasteboard claims are only attempted for `linkme:cid=...` tokens or URLs on `li-nk.me` / your configured `baseUrl` host.
+- On successful pasteboard claim, the consumed clipboard token is cleared.
 - Android deferred claims:
   - **Install Referrer** (deterministic): `/api/install-referrer`
   - **Fingerprint** (probabilistic fallback): `/api/deferred/claim`
