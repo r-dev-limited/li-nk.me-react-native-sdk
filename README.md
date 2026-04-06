@@ -1,61 +1,143 @@
 # LinkMe React Native SDK
 
-React Native SDK for LinkMe — deep linking and attribution.
+Deep linking, deferred deep linking, and attribution for React Native and Expo apps.
 
-- **Main Site**: [li-nk.me](https://li-nk.me)
-- **Documentation**: [React Native Setup](https://li-nk.me/docs/developer/setup/react-native)
-- **Package**: [npm](https://www.npmjs.com/package/@li-nk.me/react-native-sdk)
+[![npm](https://img.shields.io/npm/v/@li-nk.me/react-native-sdk)](https://www.npmjs.com/package/@li-nk.me/react-native-sdk)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## Installation
+- [Main Site](https://li-nk.me)
+- [Setup Guide](https://help.li-nk.me/hc/link-me/en/developer-setup/react-native-setup-guide)
+- [SDK Reference](https://help.li-nk.me/hc/link-me/en/sdks/react-native-sdk-reference)
+- [Help Center](https://help.li-nk.me/hc/link-me/en)
+
+## Quick start
+
+### 1. Prerequisites
+
+- A LinkMe app with iOS bundle ID and Android package name configured
+- API keys (`appId` and `appKey`) from **App Settings > API Keys**
+- React Native 0.72+ or Expo SDK 50+
+- Node.js 18+
+
+### 2. Install
 
 ```bash
 npm install @li-nk.me/react-native-sdk
+
+# Recommended for iOS pasteboard-based deferred linking
+npx expo install expo-clipboard
 ```
 
-## Basic Usage
+### 3. Configure deep linking (Expo)
 
-```ts
-import { configure, getInitialLink, onLink } from '@li-nk.me/react-native-sdk';
+Add the config plugin to `app.json`:
 
-await configure({
-  appId: 'your_app_id',
-  appKey: 'your_app_key',
-  debug: __DEV__,
-});
-
-const initial = await getInitialLink();
-if (initial?.path) router.replace(initial.path);
-
-const sub = onLink((payload) => {
-  if (payload?.path) router.replace(payload.path);
-});
-// Later: sub.remove();
+```json
+{
+  "expo": {
+    "scheme": "yourapp",
+    "plugins": [
+      [
+        "@li-nk.me/react-native-sdk/plugin/app.plugin.js",
+        {
+          "hosts": ["links.yourco.com"],
+          "associatedDomains": ["links.yourco.com"],
+          "schemes": ["yourapp"]
+        }
+      ]
+    ]
+  }
+}
 ```
 
-## API
+The Expo config plugin automatically sets up Associated Domains (iOS) and App Links intent filters (Android). For bare React Native projects, configure these manually following the [iOS](https://help.li-nk.me/hc/link-me/en/developer-setup/ios-setup-guide) and [Android](https://help.li-nk.me/hc/link-me/en/developer-setup/android-setup-guide) setup guides.
+
+### 4. Initialize and handle links
+
+```tsx
+import { useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import {
+  configure,
+  getInitialLink,
+  claimDeferredIfAvailable,
+  onLink,
+  track,
+} from '@li-nk.me/react-native-sdk';
+
+export function useLinkMe() {
+  const router = useRouter();
+
+  useEffect(() => {
+    let unsubscribe: { remove: () => void } | null = null;
+
+    (async () => {
+      await configure({
+        appId: process.env.EXPO_PUBLIC_LINKME_APP_ID!,
+        appKey: process.env.EXPO_PUBLIC_LINKME_APP_KEY,
+        debug: __DEV__,
+      });
+
+      // Live links while app is open
+      unsubscribe = onLink((payload) => {
+        if (payload?.path) router.replace(payload.path as never);
+      });
+
+      // Cold-start link
+      const initial = await getInitialLink();
+      if (initial?.path) {
+        router.replace(initial.path as never);
+      } else {
+        // Deferred deep link (first install)
+        const deferred = await claimDeferredIfAvailable();
+        if (deferred?.path) router.replace(deferred.path as never);
+      }
+
+      await track('open');
+    })();
+
+    return () => unsubscribe?.remove();
+  }, [router]);
+}
+```
+
+Call `useLinkMe()` from `app/_layout.tsx` (Expo Router) or inside your root navigator.
+
+## Deferred deep linking
+
+| Platform | Primary | Fallback |
+| --- | --- | --- |
+| iOS | Pasteboard (`cid` token via `expo-clipboard`) | Fingerprint (`/api/deferred/claim`) |
+| Android | Play Install Referrer (`/api/install-referrer`) | Fingerprint (`/api/deferred/claim`) |
+
+- Enable **Pasteboard for Deferred Links** in App Settings for deterministic iOS attribution
+- iOS pasteboard claims only match `linkme:cid=...` tokens or URLs on your configured host
+- Consumed clipboard tokens are cleared after successful claim
+
+## API reference
 
 | Function | Description |
 | --- | --- |
-| `configure(config)` | Initialize the SDK. |
-| `getInitialLink()` | Get the payload that opened the app. |
-| `handleUrl(url)` | Manually process a URL. Returns `boolean`. |
-| `claimDeferredIfAvailable()` | Install Referrer (Android) / pasteboard (iOS) / fingerprint fallback. |
-| `onLink(callback)` | Subscribe to future payloads. Returns `{ remove }`. |
-| `track(event, properties?)` | Send analytics events. |
-| `setUserId(userId)` | Associate a user ID. |
-| `setAdvertisingConsent(granted)` | Toggle advertising identifier usage. |
-| `setReady()` | Signal readiness to process queued URLs. |
+| `configure(config)` | Initialize the SDK |
+| `getInitialLink()` | Get the payload that opened the app |
+| `handleUrl(url)` | Manually process a URL (returns `boolean`) |
+| `claimDeferredIfAvailable()` | Claim deferred deep link on first install |
+| `onLink(callback)` | Subscribe to future payloads (returns `{ remove }`) |
+| `track(event, properties?)` | Send analytics events |
+| `setUserId(userId)` | Associate a user ID |
+| `setAdvertisingConsent(granted)` | Toggle advertising identifier usage |
+| `setReady()` | Signal readiness to process queued URLs |
 
 ### Config options
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `appId` | `string` | — | Required. |
-| `appKey` | `string` | — | Optional read-only key. |
-| `sendDeviceInfo` | `boolean` | `true` | Include device metadata. |
-| `includeVendorId` | `boolean` | — | iOS vendor identifier. |
-| `includeAdvertisingId` | `boolean` | — | Ad ID (after consent). |
-| `debug` | `boolean` | `false` | Log to console. |
+| `appId` | `string` | — | Required |
+| `appKey` | `string` | — | Optional read-only key |
+| `sendDeviceInfo` | `boolean` | `true` | Include device metadata |
+| `includeVendorId` | `boolean` | — | iOS vendor identifier |
+| `includeAdvertisingId` | `boolean` | — | Ad ID (requires consent) |
+| `debug` | `boolean` | `false` | Log to console |
 
 ### Class API
 
@@ -68,22 +150,15 @@ await client.configure({ appId: 'app_123' });
 
 `LinkMeClient` exposes the same methods as the top-level functions.
 
-## Debugging Deferred Links
+## Example app
 
-- Pass `debug: true` (or `__DEV__`) to `configure` to emit `[LinkMe SDK]` logs for pasteboard and fingerprint claims.
-- Check that Expo Clipboard is installed if you expect pasteboard-based iOS claims.
-- iOS pasteboard claims are only attempted for `linkme:cid=...` tokens or URLs on `li-nk.me` / your configured `baseUrl` host.
-- On successful pasteboard claim, the consumed clipboard token is cleared.
-- Android deferred claims:
-  - **Install Referrer** (deterministic): `/api/install-referrer`
-  - **Fingerprint** (probabilistic fallback): `/api/deferred/claim`
-- A `404` from `/api/deferred/claim` typically means `no_match` (no eligible click token to claim).
+The `example-expo/` directory contains a runnable Expo sample:
 
-## App Events
-
-`track("open")` and other events are sent to `POST /api/app-events` and require a write-capable API key when keys are enforced.
-
-For full documentation, guides, and API reference, please visit our [Help Center](https://li-nk.me/docs/help).
+```bash
+cd example-expo
+cp .env.example .env  # fill in your keys
+npx expo start
+```
 
 ## License
 
