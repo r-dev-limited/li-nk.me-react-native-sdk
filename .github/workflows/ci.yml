@@ -62,8 +62,8 @@ jobs:
         working-directory: example-expo
         run: npx expo export --platform android
       - name: Build the Android consumer
-        working-directory: example-expo
-        run: ./android/gradlew assembleDebug --no-daemon
+        working-directory: example-expo/android
+        run: ./gradlew assembleDebug --no-daemon
       - name: Build the iOS Detox framework
         working-directory: example-expo
         run: |
