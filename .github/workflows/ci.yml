@@ -67,6 +67,7 @@ jobs:
       - name: Install applesimutils for Detox
         run: |
           brew tap wix-incubator/brew
+          brew trust wix-incubator/brew
           brew install applesimutils
       - name: Build the iOS Detox framework
         working-directory: example-expo
