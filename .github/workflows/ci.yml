@@ -64,6 +64,10 @@ jobs:
       - name: Build the Android consumer
         working-directory: example-expo/android
         run: ./gradlew assembleDebug --no-daemon
+      - name: Install applesimutils for Detox
+        run: |
+          brew tap wix/brew
+          brew install applesimutils
       - name: Build the iOS Detox framework
         working-directory: example-expo
         run: |
