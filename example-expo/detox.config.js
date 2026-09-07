@@ -3,7 +3,8 @@ const path = require('node:path');
 function resolveDeviceConfig() {
     const deviceName = process.env.IOS_DEVICE || process.env.DEVICE_ID;
     if (!deviceName) {
-        return { type: 'iPhone 15' };
+        // macos-26 hosted runners ship iPhone 17 Pro on iOS 26.x.
+        return { type: 'iPhone 17 Pro' };
     }
     if (deviceName.includes('-')) {
         return { id: deviceName };
