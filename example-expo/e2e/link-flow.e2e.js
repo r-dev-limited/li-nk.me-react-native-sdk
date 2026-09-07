@@ -210,7 +210,7 @@ describe('LinkMe Expo example', () => {
             // terminate-before-launch cleanup here: on a hosted simulator that
             // is still completing Apple data migration, simctl can block for the
             // full hook timeout even though the app is not installed yet.
-            newInstance: true,
+            newInstance: false,
             permissions: { userTracking: 'YES', clipboard: 'YES' },
         });
         // We do NOT disable synchronization globally because we want to wait for React to be idle.
