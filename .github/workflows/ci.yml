@@ -30,8 +30,8 @@ jobs:
 
   expo-consumer:
     name: Expo consumer (Android build and iOS release E2E)
-    # RN 0.86 requires Xcode 16.1+; macos-15 currently provides Xcode 16.x.
-    runs-on: macos-15
+    # Expo/RN's current Apple package requires Swift 6.2; macos-26 provides Xcode 26.x.
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
