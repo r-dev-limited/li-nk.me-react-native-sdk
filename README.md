@@ -3,7 +3,7 @@
 Deep linking, deferred deep linking, and attribution for React Native and Expo apps.
 
 [![npm](https://img.shields.io/npm/v/@li-nk.me/react-native-sdk)](https://www.npmjs.com/package/@li-nk.me/react-native-sdk)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 - [Main Site](https://li-nk.me)
 - [Setup Guide](https://help.li-nk.me/hc/link-me/en/developer-setup/react-native-setup-guide)
@@ -16,8 +16,12 @@ Deep linking, deferred deep linking, and attribution for React Native and Expo a
 
 - A LinkMe app with iOS bundle ID and Android package name configured
 - API keys (`appId` and `appKey`) from **App Settings > API Keys**
-- React Native 0.72+ or Expo SDK 50+
-- Node.js 18+
+- React Native 0.72+ for bare apps, or Expo SDK 57 (the bundled example uses RN 0.86)
+- Node.js 22+ for the SDK development and release tooling
+
+The Expo config plugin is an optional peer dependency. Expo applications
+already receive a compatible `@expo/config-plugins`; install that package
+explicitly only when using the plugin with a custom Expo toolchain.
 
 ### 2. Install
 
@@ -114,6 +118,8 @@ Call `useLinkMe()` from `app/_layout.tsx` (Expo Router) or inside your root navi
 - iOS pasteboard claims only match `linkme:cid=...` tokens or URLs on your configured host
 - Consumed clipboard tokens are cleared after successful claim
 
+When a resolved payload has `forceRedirectWeb: true` and a non-empty `webFallbackUrl`, the SDK opens the browser and suppresses `onLink` delivery. `getInitialLink()` and deferred claims return `null` after that handoff.
+
 ## API reference
 
 | Function | Description |
@@ -123,8 +129,9 @@ Call `useLinkMe()` from `app/_layout.tsx` (Expo Router) or inside your root navi
 | `handleUrl(url)` | Manually process a URL (returns `boolean`) |
 | `claimDeferredIfAvailable()` | Claim deferred deep link on first install |
 | `onLink(callback)` | Subscribe to future payloads (returns `{ remove }`) |
+| `dispose()` | Remove React Native listeners and reset controller state |
 | `track(event, properties?)` | Send analytics events |
-| `setUserId(userId)` | Associate a user ID |
+| `setUserId(userId)` | Associate a user ID; pass `null` to clear it |
 | `setAdvertisingConsent(granted)` | Toggle advertising identifier usage |
 | `setReady()` | Signal readiness to process queued URLs |
 
@@ -162,4 +169,4 @@ npx expo start
 
 ## License
 
-MIT
+Apache-2.0

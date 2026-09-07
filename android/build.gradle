@@ -8,11 +8,12 @@ apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
-  compileSdkVersion safeExtGet('compileSdkVersion', 34)
+  namespace 'com.linkme.rn'
+  compileSdkVersion safeExtGet('compileSdkVersion', 36)
 
   defaultConfig {
     minSdkVersion safeExtGet('minSdkVersion', 21)
-    targetSdkVersion safeExtGet('targetSdkVersion', 34)
+    targetSdkVersion safeExtGet('targetSdkVersion', 36)
   }
 
   sourceSets {
@@ -24,7 +25,6 @@ android {
 }
 
 dependencies {
-  implementation "com.facebook.react:react-native:+"
+  implementation "com.facebook.react:react-android"
   implementation "com.android.installreferrer:installreferrer:2.2"
 }
-

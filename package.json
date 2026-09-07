@@ -1,60 +1,76 @@
 {
-    "name": "@li-nk.me/react-native-sdk",
-    "version": "0.2.13",
-    "description": "React Native SDK for LinkMe deep and deferred links.",
-    "main": "lib/index.js",
-    "types": "lib/index.d.ts",
-    "react-native": "src/index.ts",
-    "source": "src/index.ts",
-    "files": [
-        "src",
-        "lib",
-        "plugin",
-        "android",
-        "react-native.config.js"
-    ],
-    "scripts": {
-        "build": "tsc -p tsconfig.json",
-        "clean": "rimraf lib",
-        "prepare": "npm run build"
+  "name": "@li-nk.me/react-native-sdk",
+  "version": "0.2.14",
+  "description": "React Native SDK for LinkMe deep and deferred links.",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "lib",
+    "plugin",
+    "android",
+    "!android/**/build/**",
+    "!android/**/.cxx/**",
+    "react-native.config.js",
+    "LICENSE",
+    "!src/**/*.test.*",
+    "!lib/**/*.test.*"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --runInBand",
+    "test:expo-consumer": "node scripts/validate-expo-consumer.mjs",
+    "clean": "rimraf lib",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "react-native",
+    "linkme",
+    "deep-linking",
+    "deferred",
+    "sdk"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/r-dev-limited/li-nk.me-react-native-sdk"
+  },
+  "peerDependencies": {
+    "@expo/config-plugins": ">=57.0.0",
+    "expo-clipboard": ">=6.0.0",
+    "react": ">=18",
+    "react-native": ">=0.72.0"
+  },
+  "peerDependenciesMeta": {
+    "@expo/config-plugins": {
+      "optional": true
     },
-    "keywords": [
-        "react-native",
-        "linkme",
-        "deep-linking",
-        "deferred",
-        "sdk"
-    ],
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/r-dev-limited/li-nk.me-react-native-sdk"
+    "react": {
+      "optional": true
     },
-    "peerDependencies": {
-        "react": ">=18",
-        "react-native": ">=0.72.0",
-        "expo-clipboard": ">=6.0.0"
+    "react-native": {
+      "optional": true
     },
-    "peerDependenciesMeta": {
-        "react": {
-            "optional": true
-        },
-        "react-native": {
-            "optional": true
-        },
-        "expo-clipboard": {
-            "optional": true
-        }
-    },
-    "publishConfig": {
-        "access": "public"
-    },
-    "dependencies": {
-        "@expo/config-plugins": "^8.0.11"
-    },
-    "devDependencies": {
-        "@types/node": "^20.19.39",
-        "rimraf": "^5.0.10",
-        "typescript": "^5.9.3"
+    "expo-clipboard": {
+      "optional": true
     }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.4.1",
+    "jest": "^30.5.1",
+    "react": "^19.2.3",
+    "rimraf": "^6.1.3",
+    "ts-jest": "^29.4.12",
+    "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
 }

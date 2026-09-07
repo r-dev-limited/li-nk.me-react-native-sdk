@@ -22,16 +22,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
 
       - name: Checkout tag (manual dispatch)
         if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
         shell: bash
         run: |
-          TAG="${{ github.event.inputs.tag }}"
+          TAG="$RELEASE_TAG"
           if [[ -z "$TAG" ]]; then
             echo "Input 'tag' is required." >&2
             exit 1
@@ -47,9 +49,9 @@ jobs:
           git checkout "$TAG"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           registry-url: https://registry.npmjs.org
 
@@ -58,9 +60,11 @@ jobs:
 
       - name: Verify tag matches package version
         shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
         run: |
-          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
-            TAG="${{ github.event.inputs.tag }}"
+          if [[ -n "$RELEASE_TAG" ]]; then
+            TAG="$RELEASE_TAG"
           else
             TAG="${GITHUB_REF_NAME}"
           fi
@@ -81,12 +85,34 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure version is unpublished
+        run: |
+          version=$(node -p "require('./package.json').version")
+          published=$(npm view "@li-nk.me/react-native-sdk@$version" version --registry=https://registry.npmjs.org 2>/dev/null || true)
+          if [[ "$published" == "$version" ]]; then
+            echo "Version $version is already published; create a new immutable version." >&2
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build
         run: npm run build
 
+      - name: Run tests
+        run: npm test
+
+      - name: Enforce coverage
+        run: npm test -- --coverage
+
+      - name: Validate publish archive
+        run: |
+          npm pack --dry-run --json --ignore-scripts > pack.json
+          node -e "const raw=require('./pack.json'); const findFiles=v=>{if(!v||typeof v!=='object')return null;if(Array.isArray(v.files))return v.files;for(const child of Object.values(v)){const found=findFiles(child);if(found)return found}return null}; const entries=findFiles(raw); if(!entries) { console.error('npm pack JSON did not contain a files list'); process.exit(1) }; const files=entries.map(f=>typeof f==='string'?f:f.path); if(!files.includes('LICENSE') || files.some(f=>/\\.test\\./.test(f))) process.exit(1); console.log('archive-ok')"
+
+      - name: Smoke test packed Expo consumer
+        run: npm run test:expo-consumer
+
       - name: Publish
         run: npm publish --access public
-

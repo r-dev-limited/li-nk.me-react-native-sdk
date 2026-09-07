@@ -29,11 +29,6 @@ const blockListPatterns = [
 ];
 config.resolver.blockList = new RegExp(blockListPatterns.join('|'));
 
-// Avoid walking up the directory tree for node_modules
-config.resolver.disableHierarchicalLookup = true;
-
-// Enable resolving symlinked packages (local "file:" deps)
-config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = false;
 
 module.exports = config;

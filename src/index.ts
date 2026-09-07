@@ -23,6 +23,7 @@ export type LinkMePayload = {
     custom?: Record<string, string>;
     url?: string;
     isLinkMe?: boolean;
+    duplicate?: boolean;
     forceRedirectWeb?: boolean;
     webFallbackUrl?: string;
 };
@@ -49,6 +50,11 @@ type NormalizedConfig = LinkMeConfig & {
 };
 
 type Listener = (payload: LinkMePayload) => void;
+
+type DeferredClaimResult = {
+    handled: boolean;
+    payload: LinkMePayload | null;
+};
 
 type LinkingLike = typeof Linking;
 
@@ -124,6 +130,9 @@ class LinkMeController {
     }
 
     async getInitialLink(): Promise<LinkMePayload | null> {
+        if (!this.ready || !this.config) {
+            return null;
+        }
         if (this.lastPayload) {
             return this.lastPayload;
         }
@@ -134,7 +143,7 @@ class LinkMeController {
         try {
             const url = await this.linking?.getInitialURL?.();
             if (url) {
-                return await this.processUrl(url);
+                return await this.processUrl(url, true);
             }
         } catch {
             /* noop */
@@ -164,10 +173,10 @@ class LinkMeController {
 
         // 0. Android: deterministic claim via Play Install Referrer (if available)
         if (Platform.OS === 'android') {
-            const referrerPayload = await this.tryClaimFromInstallReferrer(cfg);
-            if (referrerPayload) {
+            const referrerResult = await this.tryClaimFromInstallReferrer(cfg);
+            if (referrerResult.handled) {
                 this.logDebug('deferred.install_referrer.payload');
-                return referrerPayload;
+                return referrerResult.payload;
             }
             this.logDebug('deferred.install_referrer.no_match');
         }
@@ -175,10 +184,10 @@ class LinkMeController {
         // 1. On iOS, try to read CID from pasteboard first (if expo-clipboard is available)
         if (Platform.OS === 'ios' && Clipboard?.getStringAsync) {
             this.logDebug('deferred.pasteboard.check');
-            const pasteboardPayload = await this.tryClaimFromPasteboard(cfg);
-            if (pasteboardPayload) {
+            const pasteboardResult = await this.tryClaimFromPasteboard(cfg);
+            if (pasteboardResult.handled) {
                 this.logDebug('deferred.pasteboard.payload');
-                return pasteboardPayload;
+                return pasteboardResult.payload;
             }
             this.logDebug('deferred.pasteboard.no_match');
         }
@@ -205,6 +214,9 @@ class LinkMeController {
             const payload = await this.parsePayload(res);
             if (payload) {
                 this.logDebug('deferred.fingerprint.payload', { linkId: payload.linkId, duplicate: (payload as any)?.duplicate });
+                if (await this.maybeHandleForcedWebRedirect(payload)) {
+                    return null;
+                }
                 this.emit(payload);
             } else {
                 this.logDebug('deferred.fingerprint.no_match');
@@ -216,19 +228,19 @@ class LinkMeController {
         }
     }
 
-    private async tryClaimFromInstallReferrer(cfg: NormalizedConfig): Promise<LinkMePayload | null> {
+    private async tryClaimFromInstallReferrer(cfg: NormalizedConfig): Promise<DeferredClaimResult> {
         try {
             const mod: any = (NativeModules as any)?.LinkMeInstallReferrer;
             const getReferrer = mod?.getInstallReferrer;
             if (typeof getReferrer !== 'function') {
                 this.logDebug('install_referrer.skip_module');
-                return null;
+                return { handled: false, payload: null };
             }
             this.logDebug('install_referrer.read');
             const referrer = String((await getReferrer()) || '').trim();
             if (!referrer) {
                 this.logDebug('install_referrer.empty');
-                return null;
+                return { handled: false, payload: null };
             }
 
             this.logDebug('install_referrer.request');
@@ -239,58 +251,62 @@ class LinkMeController {
             });
             if (!res.ok) {
                 this.logDebug('install_referrer.http_error', { status: res.status });
-                return null;
+                return { handled: false, payload: null };
             }
             const payload = await this.parsePayload(res);
             if (payload) {
-                if (!(await this.maybeHandleForcedWebRedirect(payload))) {
-                    this.emit(payload);
+                if (await this.maybeHandleForcedWebRedirect(payload)) {
+                    return { handled: true, payload: null };
                 }
+                this.emit(payload);
                 void this.track('claim', { claim_type: 'install_referrer' });
+                return { handled: true, payload };
             }
-            return payload;
+            return { handled: false, payload: null };
         } catch (err) {
             this.logDebug('install_referrer.error', { message: err instanceof Error ? err.message : String(err) });
-            return null;
+            return { handled: false, payload: null };
         }
     }
 
-    private async tryClaimFromPasteboard(cfg: NormalizedConfig): Promise<LinkMePayload | null> {
+    private async tryClaimFromPasteboard(cfg: NormalizedConfig): Promise<DeferredClaimResult> {
         try {
             if (!Clipboard?.getStringAsync) {
                 this.logDebug('pasteboard.skip_module');
-                return null;
+                return { handled: false, payload: null };
             }
             this.logDebug('pasteboard.read');
             const pasteStr = await Clipboard.getStringAsync();
             if (!pasteStr) {
                 this.logDebug('pasteboard.empty');
-                return null;
+                return { handled: false, payload: null };
             }
             // Check if the clipboard contains a li-nk.me URL with a cid parameter
             const cid = this.extractCidFromString(pasteStr, cfg);
             if (!cid) {
                 this.logDebug('pasteboard.no_cid', { hasClipboard: true });
-                return null;
+                return { handled: false, payload: null };
             }
             this.logDebug('pasteboard.cid_found');
             // Resolve the CID to get the payload
             const payload = await this.resolveCidWithConfig(cfg, cid);
             if (payload) {
-                if (!(await this.maybeHandleForcedWebRedirect(payload))) {
-                    this.emit(payload);
+                if (await this.maybeHandleForcedWebRedirect(payload)) {
+                    return { handled: true, payload: null };
                 }
+                this.emit(payload);
                 await this.clearPasteboardCidIfPresent(cid);
                 // Track pasteboard claim
                 this.logDebug('pasteboard.payload', { linkId: payload.linkId });
                 void this.track('claim', { claim_type: 'pasteboard' });
+                return { handled: true, payload };
             } else {
                 this.logDebug('pasteboard.resolve_empty');
             }
-            return payload;
+            return { handled: false, payload: null };
         } catch (err) {
             this.logDebug('pasteboard.error', { message: err instanceof Error ? err.message : String(err) });
-            return null;
+            return { handled: false, payload: null };
         }
     }
 
@@ -377,14 +393,16 @@ class LinkMeController {
             if (!res.ok) {
                 return null;
             }
-            return this.parsePayload(res);
+            const payload = await this.parsePayload(res);
+            if (payload && payload.cid === undefined) payload.cid = cid;
+            return payload;
         } catch {
             return null;
         }
     }
 
-    setUserId(userId: string): void {
-        this.userId = userId;
+    setUserId(userId: string | null): void {
+        this.userId = userId ?? undefined;
     }
 
     setAdvertisingConsent(granted: boolean): void {
@@ -444,6 +462,18 @@ class LinkMeController {
         };
     }
 
+    dispose(): void {
+        this.linkingSubscription?.remove();
+        this.linkingSubscription = null;
+        this.listeners.clear();
+        this.pendingUrls.length = 0;
+        this.lastPayload = null;
+        this.initialUrlChecked = false;
+        this.ready = false;
+        this.config = undefined;
+        this.userId = undefined;
+    }
+
     private subscribeToLinking(): void {
         if (this.linkingSubscription || !this.linking || typeof this.linking.addEventListener !== 'function') {
             return;
@@ -487,7 +517,7 @@ class LinkMeController {
         }
     }
 
-    private async processUrl(url: string): Promise<LinkMePayload | null> {
+    private async processUrl(url: string, suppressForcedReturn = false): Promise<LinkMePayload | null> {
         const cfg = this.config;
         if (!cfg) {
             return null;
@@ -504,9 +534,10 @@ class LinkMeController {
             payload = await this.resolveUniversalLink(url);
         }
         if (payload) {
-            if (!(await this.maybeHandleForcedWebRedirect(payload))) {
-                this.emit(payload);
+            if (await this.maybeHandleForcedWebRedirect(payload)) {
+                return suppressForcedReturn ? null : payload;
             }
+            this.emit(payload);
         }
         return payload;
     }
@@ -541,7 +572,9 @@ class LinkMeController {
             if (!res.ok) {
                 return null;
             }
-            return await this.parsePayload(res);
+            const payload = await this.parsePayload(res);
+            if (payload && payload.cid === undefined) payload.cid = cid;
+            return payload;
         } catch {
             return null;
         }
@@ -626,14 +659,37 @@ class LinkMeController {
 
     private async parsePayload(res: Response, assumeLinkMe = true): Promise<LinkMePayload | null> {
         try {
-            const json = (await res.json()) as LinkMePayload;
-            if (!json) {
+            const json = (await res.json()) as unknown;
+            if (!json || typeof json !== 'object' || Array.isArray(json)) {
                 return null;
             }
-            if (assumeLinkMe && json.isLinkMe === undefined) {
-                json.isLinkMe = true;
+            const raw = json as Record<string, unknown>;
+            const payload: LinkMePayload = {};
+            let hasPayloadField = false;
+            if (typeof raw.cid === 'string') { payload.cid = raw.cid; hasPayloadField = true; }
+            if (typeof raw.linkId === 'string') { payload.linkId = raw.linkId; hasPayloadField = true; }
+            if (typeof raw.path === 'string') { payload.path = raw.path; hasPayloadField = true; }
+            if (typeof raw.url === 'string') { payload.url = raw.url; hasPayloadField = true; }
+            if (typeof raw.isLinkMe === 'boolean') { payload.isLinkMe = raw.isLinkMe; hasPayloadField = true; }
+            if (typeof raw.duplicate === 'boolean') { payload.duplicate = raw.duplicate; hasPayloadField = true; }
+            if (typeof raw.forceRedirectWeb === 'boolean') { payload.forceRedirectWeb = raw.forceRedirectWeb; hasPayloadField = true; }
+            if (typeof raw.webFallbackUrl === 'string') { payload.webFallbackUrl = raw.webFallbackUrl; hasPayloadField = true; }
+            for (const key of ['params', 'utm', 'custom'] as const) {
+                const value = raw[key];
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    const entries = Object.entries(value as Record<string, unknown>)
+                        .filter(([, item]) => typeof item === 'string') as Array<[string, string]>;
+                    if (entries.length) {
+                        payload[key] = Object.fromEntries(entries);
+                        hasPayloadField = true;
+                    }
+                }
             }
-            return json;
+            if (!hasPayloadField) return null;
+            if (assumeLinkMe && raw.isLinkMe === undefined) {
+                payload.isLinkMe = true;
+            }
+            return payload;
         } catch (err) {
             this.logDebug('payload.parse_error', { message: err instanceof Error ? err.message : String(err) });
             return null;
@@ -762,7 +818,7 @@ export function claimDeferredIfAvailable(): Promise<LinkMePayload | null> {
     return defaultController.claimDeferredIfAvailable();
 }
 
-export function setUserId(userId: string): Promise<void> {
+export function setUserId(userId: string | null): Promise<void> {
     defaultController.setUserId(userId);
     return Promise.resolve();
 }
@@ -782,6 +838,10 @@ export function track(event: string, properties?: Record<string, any>): Promise<
 
 export function onLink(listener: Listener): { remove: () => void } {
     return defaultController.onLink(listener);
+}
+
+export function dispose(): void {
+    defaultController.dispose();
 }
 
 export class LinkMeClient {
@@ -807,7 +867,7 @@ export class LinkMeClient {
         return this.controller.claimDeferredIfAvailable();
     }
 
-    setUserId(userId: string): Promise<void> {
+    setUserId(userId: string | null): Promise<void> {
         this.controller.setUserId(userId);
         return Promise.resolve();
     }
@@ -827,6 +887,10 @@ export class LinkMeClient {
 
     onLink(listener: Listener): { remove: () => void } {
         return this.controller.onLink(listener);
+    }
+
+    dispose(): void {
+        this.controller.dispose();
     }
 }
 
