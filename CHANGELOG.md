@@ -2,6 +2,11 @@
 
 All notable changes to the LinkMe React Native SDK.
 
+## 0.2.15
+
+- Drops in-flight link and deferred-claim responses after disposal or reconfiguration so an older app configuration cannot emit stale payloads.
+- Resets cached payload and identity state when a new configuration starts, with regression coverage for cross-configuration response isolation.
+
 ## 0.2.14
 
 - Adds Jest regression coverage, early initial-link queuing, payload validation, disposal, and consistent forced-web handling.

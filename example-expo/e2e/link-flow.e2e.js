@@ -202,9 +202,15 @@ async function expectHomeReady() {
 
 describe('LinkMe Expo example', () => {
     beforeAll(async () => {
+        // Install explicitly so this path works on a fresh simulator without
+        // relying on delete:true to perform a terminate-before-launch cleanup.
+        await device.installApp();
         await launchLinkMeApp({
-            delete: true,
-            newInstance: true,
+            // The release job starts on a freshly installed app. Avoid Detox's
+            // terminate-before-launch cleanup here: on a hosted simulator that
+            // is still completing Apple data migration, simctl can block for the
+            // full hook timeout even though the app is not installed yet.
+            newInstance: false,
             permissions: { userTracking: 'YES', clipboard: 'YES' },
         });
         // We do NOT disable synchronization globally because we want to wait for React to be idle.

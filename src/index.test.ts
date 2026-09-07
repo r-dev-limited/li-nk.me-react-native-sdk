@@ -114,6 +114,38 @@ describe('LinkMeClient', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it('drops an in-flight response after reconfiguration', async () => {
+    let releaseOldResponse!: (response: Response) => void;
+    const oldResponse = new Promise<Response>((resolve) => {
+      releaseOldResponse = resolve;
+    });
+    const fetchImpl = jest.fn(async (url: string) => {
+      if (url.includes('old.example')) return oldResponse;
+      return jsonResponse({ cid: 'new123', path: '/new' });
+    });
+    const l = linking();
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: l as any });
+    const emitted: unknown[] = [];
+    client.onLink((payload) => emitted.push(payload));
+
+    await client.configure({ baseUrl: 'https://old.example' });
+    await client.setUserId('old-user');
+    const oldRequest = client.handleUrl('https://old.example/?cid=old123');
+    await Promise.resolve();
+    await client.configure({ baseUrl: 'https://new.example' });
+    releaseOldResponse(jsonResponse({ cid: 'old123', path: '/old' }));
+
+    await expect(oldRequest).resolves.toBe(false);
+    expect(emitted).toHaveLength(0);
+    await expect(client.handleUrl('https://new.example/?cid=new123')).resolves.toBe(true);
+    expect(emitted).toHaveLength(1);
+    await client.track('open');
+    const calls = fetchImpl.mock.calls as Array<[string, RequestInit?]>;
+    const lastCall = calls[calls.length - 1];
+    const trackBody = JSON.parse(lastCall?.[1]?.body as string);
+    expect(trackBody).not.toHaveProperty('userId');
+  });
+
   it('resolves universal URLs, sends consent-gated device data, and rejects unsupported schemes', async () => {
     const l = linking();
     const fetchImpl = jest.fn(async (_url: string, _init?: RequestInit) => jsonResponse({ linkId: 'universal-1', path: '/welcome' }));
