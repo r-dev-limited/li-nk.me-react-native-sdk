@@ -107,6 +107,8 @@ class LinkMeController {
     private initialUrlChecked = false;
     private readonly fetchImpl: FetchLike;
     private readonly linking: LinkingLike | undefined;
+    /** Requests from an earlier configuration must not publish into a newer one. */
+    private generation = 0;
 
     constructor(deps?: ControllerDeps) {
         const impl = deps?.fetchImpl ?? (globalThis as any)?.fetch;
@@ -118,19 +120,30 @@ class LinkMeController {
     }
 
     async configure(config: LinkMeConfig): Promise<void> {
+        const generation = ++this.generation;
+        const hadConfig = this.config !== undefined;
+        if (hadConfig) {
+            this.pendingUrls.length = 0;
+        }
         const normalized = normalizeConfig(config);
         this.config = normalized;
+        this.ready = false;
+        this.lastPayload = null;
+        this.initialUrlChecked = false;
+        this.userId = undefined;
         this.advertisingConsent = !!config.includeAdvertisingId;
         const fallbackDev = Boolean((globalThis as any)?.__DEV__);
         this.debug = normalized.debug ?? fallbackDev;
         this.logDebug('configure', { baseUrl: normalized.baseUrl, debug: this.debug });
         this.subscribeToLinking();
         this.ready = true;
-        await this.drainPending();
+        await this.drainPending(generation);
     }
 
     async getInitialLink(): Promise<LinkMePayload | null> {
-        if (!this.ready || !this.config) {
+        const cfg = this.config;
+        const generation = this.generation;
+        if (!this.ready || !cfg) {
             return null;
         }
         if (this.lastPayload) {
@@ -143,7 +156,7 @@ class LinkMeController {
         try {
             const url = await this.linking?.getInitialURL?.();
             if (url) {
-                return await this.processUrl(url, true);
+                return await this.processUrl(url, true, generation);
             }
         } catch {
             /* noop */
@@ -159,13 +172,14 @@ class LinkMeController {
             this.pendingUrls.push(url);
             return false;
         }
-        const payload = await this.processUrl(url);
+        const payload = await this.processUrl(url, false, this.generation);
         return payload != null;
     }
 
     async claimDeferredIfAvailable(): Promise<LinkMePayload | null> {
         const cfg = this.config;
-        if (!cfg) {
+        const generation = this.generation;
+        if (!cfg || !this.isCurrent(generation, cfg)) {
             this.logDebug('deferred.skip_no_config');
             return null;
         }
@@ -173,7 +187,8 @@ class LinkMeController {
 
         // 0. Android: deterministic claim via Play Install Referrer (if available)
         if (Platform.OS === 'android') {
-            const referrerResult = await this.tryClaimFromInstallReferrer(cfg);
+            const referrerResult = await this.tryClaimFromInstallReferrer(cfg, generation);
+            if (!this.isCurrent(generation, cfg)) return null;
             if (referrerResult.handled) {
                 this.logDebug('deferred.install_referrer.payload');
                 return referrerResult.payload;
@@ -184,7 +199,8 @@ class LinkMeController {
         // 1. On iOS, try to read CID from pasteboard first (if expo-clipboard is available)
         if (Platform.OS === 'ios' && Clipboard?.getStringAsync) {
             this.logDebug('deferred.pasteboard.check');
-            const pasteboardResult = await this.tryClaimFromPasteboard(cfg);
+            const pasteboardResult = await this.tryClaimFromPasteboard(cfg, generation);
+            if (!this.isCurrent(generation, cfg)) return null;
             if (pasteboardResult.handled) {
                 this.logDebug('deferred.pasteboard.payload');
                 return pasteboardResult.payload;
@@ -207,6 +223,7 @@ class LinkMeController {
                 headers: this.buildHeaders(true),
                 body: JSON.stringify(body),
             });
+            if (!this.isCurrent(generation, cfg)) return null;
             if (!res.ok) {
                 this.logDebug('deferred.fingerprint.http_error', { status: res.status });
                 return null;
@@ -228,7 +245,7 @@ class LinkMeController {
         }
     }
 
-    private async tryClaimFromInstallReferrer(cfg: NormalizedConfig): Promise<DeferredClaimResult> {
+    private async tryClaimFromInstallReferrer(cfg: NormalizedConfig, generation: number): Promise<DeferredClaimResult> {
         try {
             const mod: any = (NativeModules as any)?.LinkMeInstallReferrer;
             const getReferrer = mod?.getInstallReferrer;
@@ -238,6 +255,7 @@ class LinkMeController {
             }
             this.logDebug('install_referrer.read');
             const referrer = String((await getReferrer()) || '').trim();
+            if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
             if (!referrer) {
                 this.logDebug('install_referrer.empty');
                 return { handled: false, payload: null };
@@ -249,6 +267,7 @@ class LinkMeController {
                 headers: this.buildHeaders(true),
                 body: JSON.stringify({ referrer }),
             });
+            if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
             if (!res.ok) {
                 this.logDebug('install_referrer.http_error', { status: res.status });
                 return { handled: false, payload: null };
@@ -269,7 +288,7 @@ class LinkMeController {
         }
     }
 
-    private async tryClaimFromPasteboard(cfg: NormalizedConfig): Promise<DeferredClaimResult> {
+    private async tryClaimFromPasteboard(cfg: NormalizedConfig, generation: number): Promise<DeferredClaimResult> {
         try {
             if (!Clipboard?.getStringAsync) {
                 this.logDebug('pasteboard.skip_module');
@@ -277,6 +296,7 @@ class LinkMeController {
             }
             this.logDebug('pasteboard.read');
             const pasteStr = await Clipboard.getStringAsync();
+            if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
             if (!pasteStr) {
                 this.logDebug('pasteboard.empty');
                 return { handled: false, payload: null };
@@ -290,6 +310,7 @@ class LinkMeController {
             this.logDebug('pasteboard.cid_found');
             // Resolve the CID to get the payload
             const payload = await this.resolveCidWithConfig(cfg, cid);
+            if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
             if (payload) {
                 if (await this.maybeHandleForcedWebRedirect(payload)) {
                     return { handled: true, payload: null };
@@ -410,8 +431,9 @@ class LinkMeController {
     }
 
     async setReady(): Promise<void> {
+        const generation = this.generation;
         this.ready = true;
-        await this.drainPending();
+        await this.drainPending(generation);
     }
 
     async track(event: string, properties?: Record<string, any>): Promise<void> {
@@ -463,6 +485,7 @@ class LinkMeController {
     }
 
     dispose(): void {
+        this.generation += 1;
         this.linkingSubscription?.remove();
         this.linkingSubscription = null;
         this.listeners.clear();
@@ -505,21 +528,22 @@ class LinkMeController {
         void this.processUrl(url);
     }
 
-    private async drainPending(): Promise<void> {
-        if (!this.ready || !this.config) {
+    private async drainPending(generation: number): Promise<void> {
+        if (!this.ready || !this.config || !this.isCurrent(generation, this.config)) {
             return;
         }
         while (this.pendingUrls.length > 0) {
             const url = this.pendingUrls.shift();
             if (url) {
-                await this.processUrl(url);
+                await this.processUrl(url, false, generation);
             }
+            if (!this.config || !this.isCurrent(generation, this.config)) return;
         }
     }
 
-    private async processUrl(url: string, suppressForcedReturn = false): Promise<LinkMePayload | null> {
+    private async processUrl(url: string, suppressForcedReturn = false, generation = this.generation): Promise<LinkMePayload | null> {
         const cfg = this.config;
-        if (!cfg) {
+        if (!cfg || !this.isCurrent(generation, cfg)) {
             return null;
         }
         const parsed = this.parseUrl(url);
@@ -529,10 +553,11 @@ class LinkMeController {
         const cid = parsed.searchParams?.get('cid');
         let payload: LinkMePayload | null = null;
         if (cid) {
-            payload = await this.resolveCid(cid);
+            payload = await this.resolveCid(cfg, cid);
         } else if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-            payload = await this.resolveUniversalLink(url);
+            payload = await this.resolveUniversalLink(cfg, url);
         }
+        if (!this.isCurrent(generation, cfg)) return null;
         if (payload) {
             if (await this.maybeHandleForcedWebRedirect(payload)) {
                 return suppressForcedReturn ? null : payload;
@@ -554,11 +579,7 @@ class LinkMeController {
         }
     }
 
-    private async resolveCid(cid: string): Promise<LinkMePayload | null> {
-        const cfg = this.config;
-        if (!cfg) {
-            return null;
-        }
+    private async resolveCid(cfg: NormalizedConfig, cid: string): Promise<LinkMePayload | null> {
         try {
             const headers = this.buildHeaders(false);
             const device = cfg.sendDeviceInfo === false ? undefined : this.buildDevicePayload();
@@ -580,11 +601,7 @@ class LinkMeController {
         }
     }
 
-    private async resolveUniversalLink(url: string): Promise<LinkMePayload | null> {
-        const cfg = this.config;
-        if (!cfg) {
-            return null;
-        }
+    private async resolveUniversalLink(cfg: NormalizedConfig, url: string): Promise<LinkMePayload | null> {
         try {
             const body: Record<string, any> = { url };
             const device = cfg.sendDeviceInfo === false ? undefined : this.buildDevicePayload();
@@ -759,6 +776,10 @@ class LinkMeController {
             this.logDebug('force_web.browser_open_failed', { message: err instanceof Error ? err.message : String(err), url: target });
             return false;
         }
+    }
+
+    private isCurrent(generation: number, cfg: NormalizedConfig): boolean {
+        return this.generation === generation && this.config === cfg && this.ready;
     }
 }
 
