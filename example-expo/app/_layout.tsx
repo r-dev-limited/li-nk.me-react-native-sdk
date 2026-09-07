@@ -9,10 +9,11 @@ import {
     track,
     LinkMePayload,
 } from '@li-nk.me/react-native-sdk';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 
 export default function RootLayout() {
     const router = useRouter();
+    const pathname = usePathname();
     const unsubRef = useRef<{ remove: () => void } | null>(null);
     const initializedRef = useRef(false);
     const [isReady, setIsReady] = useState(false);
@@ -70,7 +71,12 @@ export default function RootLayout() {
                     if (payload.path) {
                         const targetPath = payload.path.startsWith('/') ? payload.path : `/${payload.path}`;
                         console.log('[LinkMe Example] Navigating to:', targetPath);
-                        router.replace(targetPath as any);
+                        // Replacing the current route with itself remounts this
+                        // layout while the dev client reconnects, which repeats
+                        // initialization indefinitely and hides the ready view.
+                        if (targetPath !== pathname) {
+                            router.replace(targetPath as any);
+                        }
                     }
                 });
 
@@ -83,7 +89,9 @@ export default function RootLayout() {
                 if (initial?.path) {
                     const targetPath = initial.path.startsWith('/') ? initial.path : `/${initial.path}`;
                     console.log('[LinkMe Example] Navigating to initial path:', targetPath);
-                    router.replace(targetPath as any);
+                    if (targetPath !== pathname) {
+                        router.replace(targetPath as any);
+                    }
                 } else {
                     // Step 4: If no initial link, check for deferred link
                     console.log('[LinkMe Example] No initial link, checking deferred');
@@ -94,7 +102,9 @@ export default function RootLayout() {
                     if (deferred?.path) {
                         const targetPath = deferred.path.startsWith('/') ? deferred.path : `/${deferred.path}`;
                         console.log('[LinkMe Example] Navigating to deferred path:', targetPath);
-                        router.replace({ pathname: targetPath as any, params: deferred });
+                        if (targetPath !== pathname) {
+                            router.replace({ pathname: targetPath as any, params: deferred as any });
+                        }
                     }
                 }
 

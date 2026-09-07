@@ -1,5 +1,27 @@
 const { device, element, by, expect } = require('detox');
 
+async function allowPasteIfNeeded(timeoutMs = 1000) {
+    const deadline = Date.now() + timeoutMs;
+    const labels = ['Allow Paste', 'Allow', 'Paste'];
+
+    while (Date.now() < deadline) {
+        for (const label of labels) {
+            try {
+                await element(by.label(label)).atIndex(0).tap();
+                return;
+            } catch {
+                try {
+                    await element(by.text(label)).atIndex(0).tap();
+                    return;
+                } catch {
+                    // The dialog is optional; continue polling until the short deadline.
+                }
+            }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+}
+
 async function runWithPasteboardRetries(fn, attempts = 3) {
     let lastError;
     // We aggressively try to dismiss dialogs before each attempt if needed
@@ -29,6 +51,27 @@ const expoDevLaunchDelay = Number(process.env.LINKME_EXPO_LAUNCH_DELAY_MS || '30
 async function delay(ms) {
     if (ms <= 0) return;
     await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function dismissExpoOverlayIfPresent(timeoutMs = 3000) {
+    const deadline = Date.now() + timeoutMs;
+    const buttons = ['Continue', 'Close', 'X'];
+
+    while (Date.now() < deadline) {
+        for (const button of buttons) {
+            for (const matcher of [by.text, by.label]) {
+                try {
+                    await element(matcher(button)).atIndex(0).tap();
+                    console.log(`[e2e] Dismissed Expo overlay with "${button}"`);
+                    await delay(500);
+                    return;
+                } catch {
+                    // The optional overlay may not be mounted yet.
+                }
+            }
+        }
+        await delay(250);
+    }
 }
 
 async function launchLinkMeApp(options) {
@@ -63,11 +106,16 @@ async function ensureAppReady() {
             // 1. Check if we are already ready
             try {
                 // With sync disabled, this checks 'instantaneously'
-                await expect(element(by.id('sdk-status'))).toHaveText('Ready');
+                await expect(element(by.id('home-status'))).toHaveText('Status: Ready');
 
                 // If we get here, SDK is ready. Now check if Home is visible (cleared of dialogs)
                 try {
                     await expect(element(by.id('home-title'))).toBeVisible();
+                    // Expo dev builds can show a first-run developer-menu tutorial
+                    // over the ready app. Dismiss it before returning so later
+                    // taps are not sent to an obscured screen.
+                    await delay(1000);
+                    await dismissExpoOverlayIfPresent();
                     console.log('[e2e] Home screen is visible and SDK is ready.');
                     return; // Success!
                 } catch {
@@ -161,7 +209,7 @@ describe('LinkMe Expo example', () => {
         });
         // We do NOT disable synchronization globally because we want to wait for React to be idle.
         // However, animations or timers in Expo might occasionally require it.
-        // await device.disableSynchronization(); 
+        // await device.disableSynchronization();
         await expectHomeReady();
     });
 

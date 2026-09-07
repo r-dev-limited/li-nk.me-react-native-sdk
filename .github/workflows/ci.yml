@@ -1,0 +1,82 @@
+name: React Native SDK CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm test -- --coverage
+      - run: npm run build
+      - name: Validate standalone Expo consumer
+        run: npm run test:expo-consumer
+      - name: Check publish archive
+        run: |
+          npm pack --dry-run --json --ignore-scripts > pack.json
+          node -e "const p=require('./pack.json')[0]; const files=p.files.map(f=>f.path); if(!files.includes('LICENSE') || files.some(f=>/\.test\./.test(f))) process.exit(1); console.log('archive-ok')"
+
+  expo-consumer:
+    name: Expo consumer (Android build and iOS release E2E)
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            example-expo/package-lock.json
+      - name: Install and build the SDK
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Install the Expo consumer
+        working-directory: example-expo
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Typecheck the Expo consumer
+        working-directory: example-expo
+        run: npm run typecheck
+      - name: Generate native projects
+        working-directory: example-expo
+        run: npx expo prebuild --clean --no-install
+      - name: Install iOS pods
+        working-directory: example-expo/ios
+        run: pod install --no-repo-update
+      - name: Validate the Expo JavaScript bundle
+        working-directory: example-expo
+        run: npx expo export --platform android
+      - name: Build the Android consumer
+        working-directory: example-expo
+        run: ./android/gradlew assembleDebug --no-daemon
+      - name: Build the iOS Detox framework
+        working-directory: example-expo
+        run: |
+          npx detox clean-framework-cache
+          npx detox build-framework-cache
+      - name: Run the iOS release consumer E2E
+        working-directory: example-expo
+        run: npm run e2e:build:release && npm run e2e:test:release -- --headless --reuse --no-start
+      - name: Upload consumer diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: react-native-expo-consumer-diagnostics
+          path: |
+            example-expo/artifacts/
+            example-expo/ios/build/
+          if-no-files-found: ignore

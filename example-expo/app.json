@@ -5,7 +5,6 @@
     "scheme": "linkme-example",
     "version": "1.0.0",
     "orientation": "portrait",
-    "main": "expo-router/entry",
     "plugins": [
       "expo-dev-client",
       [
@@ -28,11 +27,8 @@
       "bundleIdentifier": "me.link.example"
     },
     "android": {
-      "package": "me.link.example",
-      "minSdkVersion": 24
+      "package": "me.link.example"
     },
-    "sdkVersion": "52.0.0",
-    "entryPoint": ".vscode/exponentIndex.js"
-  },
-  "name": "linkme-rn-example"
+    "sdkVersion": "57.0.0"
+  }
 }

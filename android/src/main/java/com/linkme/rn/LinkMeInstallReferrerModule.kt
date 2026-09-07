@@ -1,12 +1,15 @@
 package com.linkme.rn
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.android.installreferrer.api.InstallReferrerClient
 import com.android.installreferrer.api.InstallReferrerStateListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import java.util.concurrent.atomic.AtomicBoolean
 
 class LinkMeInstallReferrerModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
@@ -27,33 +30,39 @@ class LinkMeInstallReferrerModule(reactContext: ReactApplicationContext) :
     // Try Play Install Referrer API (works only for Play Store installs).
     try {
       val client = InstallReferrerClient.newBuilder(reactApplicationContext).build()
+      val handler = Handler(Looper.getMainLooper())
+      val settled = AtomicBoolean(false)
+      lateinit var timeout: Runnable
+      fun finish(value: String?) {
+        if (!settled.compareAndSet(false, true)) return
+        handler.removeCallbacks(timeout)
+        try {
+          client.endConnection()
+        } catch (_: Exception) {
+          // ignore
+        }
+        promise.resolve(value)
+      }
+      timeout = Runnable { finish(null) }
+      handler.postDelayed(timeout, 5000L)
       client.startConnection(object : InstallReferrerStateListener {
         override fun onInstallReferrerSetupFinished(responseCode: Int) {
           try {
             if (responseCode == InstallReferrerClient.InstallReferrerResponse.OK) {
               val details = client.installReferrer
               val referrer = details.installReferrer
-              if (!referrer.isNullOrBlank()) {
-                promise.resolve(referrer)
-              } else {
-                promise.resolve(null)
-              }
+              finish(referrer?.takeIf { it.isNotBlank() })
             } else {
-              promise.resolve(null)
+              finish(null)
             }
           } catch (_: Exception) {
-            promise.resolve(null)
-          } finally {
-            try {
-              client.endConnection()
-            } catch (_: Exception) {
-              // ignore
-            }
+            finish(null)
           }
         }
 
         override fun onInstallReferrerServiceDisconnected() {
-          // No-op; we'll just resolve null if we can't connect.
+          // Resolve so the JS controller can continue with fingerprint fallback.
+          finish(null)
         }
       })
     } catch (_: Exception) {
@@ -67,4 +76,3 @@ class LinkMeInstallReferrerModule(reactContext: ReactApplicationContext) :
     const val PREF_KEY_TS = "ts"
   }
 }
-

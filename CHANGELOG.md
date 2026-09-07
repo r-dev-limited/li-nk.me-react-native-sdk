@@ -2,6 +2,13 @@
 
 All notable changes to the LinkMe React Native SDK.
 
+## 0.2.14
+
+- Adds Jest regression coverage, early initial-link queuing, payload validation, disposal, and consistent forced-web handling.
+- Removes the release INSTALL_REFERRER receiver, updates the Expo example to SDK 57/RN 0.86, and supports `setUserId(null)`.
+- Preserves `cid`/`duplicate` attribution fields and falls through from unusable referrer/pasteboard claims to fingerprint matching.
+- Upgrades the test/build toolchain to Jest 30, TypeScript 6, Node type definitions 26, and rimraf 6; production builds exclude tests.
+
 ## 0.2.13
 
 - Tightens pasteboard deferred claim parsing to LinkMe hosts/token format only (iOS).

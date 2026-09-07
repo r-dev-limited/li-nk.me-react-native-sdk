@@ -50,7 +50,7 @@ export default function Index() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView testID="home-scroll" contentContainerStyle={styles.content}>
                 <Text style={styles.title} testID="home-title">
                     LinkMe React Native (Expo Router) Example
                 </Text>
