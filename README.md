@@ -167,6 +167,10 @@ cp .env.example .env  # fill in your keys
 npx expo start
 ```
 
+For SDK development, run `nvm install && nvm use` from the SDK root to select the patched Node 24.22.1 LTS runtime. CI also tests patched Node 22.23.4 and audits the independent SDK lockfile.
+
+As of October 24, 2026, the SDK audit is clean, while `npm audit --prefix example-expo` reports eight affected packages in the demo's development tools. `node-forge` 1.4.0 has [an unpatched signature verification advisory](https://github.com/advisories/GHSA-86w9-cpqp-85rv), inherited through Expo's code-signing CLI. Detox and bunyamin depend on older `stream-json` releases affected by [prototype pollution](https://github.com/advisories/GHSA-mjw6-4jj6-33hc) and parser denial of service advisories. The patched `stream-json` 3.x release removes CommonJS subpaths these tools require, so a forced override breaks them. These dependencies are not shipped in the SDK; review upstream fixes before using the example tooling with untrusted certificates or JSON traces.
+
 ## License
 
 Apache-2.0
