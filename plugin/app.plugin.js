@@ -9,6 +9,13 @@ const withLinkMe = (config, props = {}) => {
   const schemes = ensureArray(props.schemes);
   const associatedDomains = ensureArray(props.associatedDomains);
   const hosts = ensureArray(props.hosts);
+  const pathPrefixes = props.pathPrefixes || {};
+  for (const [host, prefixes] of Object.entries(pathPrefixes)) {
+    if (!hosts.includes(host) || !Array.isArray(prefixes) || !prefixes.length
+      || !prefixes.every(prefix => typeof prefix === 'string' && prefix.startsWith('/') && !/[?*#\s]/.test(prefix))) {
+      throw new Error('LinkMe pathPrefixes must map a configured host to nonempty absolute path prefixes.');
+    }
+  }
 
   const withIOSEntitlements = withEntitlementsPlist(config, (conf) => {
     const domains = associatedDomains.length ? associatedDomains : hosts;
@@ -76,17 +83,16 @@ const withLinkMe = (config, props = {}) => {
     // Add HTTPS intent-filters with autoVerify for App Links
     hosts.forEach((host) => {
       if (!host || typeof host !== 'string') return;
-      
-      // Check if this host already exists to avoid duplicates
-      const exists = mainActivity['intent-filter'].some((filter) => {
-        const filterData = filter.data;
-        if (!Array.isArray(filterData)) return false;
-        return filterData.some((d) => {
-          return d['$']?.['android:scheme'] === 'https' && d['$']?.['android:host'] === host;
-        });
-      });
-      
-      if (!exists) {
+      const prefixes = [...new Set(pathPrefixes[host] || [undefined])];
+      const hostData = mainActivity['intent-filter'].flatMap(filter => ensureArray(filter.data))
+        .filter(data => data?.['$']?.['android:scheme'] === 'https' && data?.['$']?.['android:host'] === host);
+      if (!pathPrefixes[host] && hostData.length) return;
+      if (pathPrefixes[host] && hostData.some(data => !data['$']['android:pathPrefix'] || !prefixes.includes(data['$']['android:pathPrefix']))) {
+        throw new Error(`LinkMe ${host} has an existing Android filter outside the configured surface paths. Update that filter before applying pathPrefixes.`);
+      }
+      prefixes.forEach(prefix => {
+        const exists = hostData.some(data => data['$']['android:pathPrefix'] === prefix);
+        if (exists) return;
         mainActivity['intent-filter'].push({
           '$': { 'android:autoVerify': 'true' },
           action: [{ '$': { 'android:name': 'android.intent.action.VIEW' } }],
@@ -94,9 +100,9 @@ const withLinkMe = (config, props = {}) => {
             { '$': { 'android:name': 'android.intent.category.DEFAULT' } },
             { '$': { 'android:name': 'android.intent.category.BROWSABLE' } },
           ],
-          data: [{ '$': { 'android:scheme': 'https', 'android:host': host } }],
+          data: [{ '$': { 'android:scheme': 'https', 'android:host': host, ...(prefix ? { 'android:pathPrefix': prefix } : {}) } }],
         });
-      }
+      });
     });
     
     // Add custom scheme intent-filters

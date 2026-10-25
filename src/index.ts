@@ -1,3 +1,4 @@
+import { RequestScope, normalizeRequestTimeout } from './requestScope';
 import { Linking, Platform } from 'react-native';
 import { NativeModules } from 'react-native';
 
@@ -24,11 +25,21 @@ export type LinkMePayload = {
     url?: string;
     isLinkMe?: boolean;
     duplicate?: boolean;
+    claimId?: string;
+    claimMethod?: string;
+    matchConfidence?: string;
+    attributionStatus?: string;
+    contractVersion?: number;
+    claimPolicyVersion?: number;
+
+    navigationAllowed?: boolean;
     forceRedirectWeb?: boolean;
     webFallbackUrl?: string;
 };
 
 export type LinkMeConfig = {
+    /** Deadline for the complete fetch/body operation. Defaults to 15000 ms. */
+    requestTimeoutMs?: number;
     baseUrl?: string;
     appId?: string;
     appKey?: string;
@@ -47,7 +58,10 @@ export type LinkMeConfig = {
 type NormalizedConfig = LinkMeConfig & {
     baseUrl: string;
     apiBaseUrl: string;
+    requestTimeoutMs: number;
 };
+
+type BufferedResponse = Pick<Response, 'ok' | 'status' | 'json' | 'text'>;
 
 type Listener = (payload: LinkMePayload) => void;
 
@@ -109,6 +123,7 @@ class LinkMeController {
     private readonly linking: LinkingLike | undefined;
     /** Requests from an earlier configuration must not publish into a newer one. */
     private generation = 0;
+    private readonly requests = new RequestScope();
 
     constructor(deps?: ControllerDeps) {
         const impl = deps?.fetchImpl ?? (globalThis as any)?.fetch;
@@ -120,12 +135,13 @@ class LinkMeController {
     }
 
     async configure(config: LinkMeConfig): Promise<void> {
-        const generation = ++this.generation;
+        const normalized = normalizeConfig(config);
+        this.cancelPendingRequests();
+        const generation = this.generation;
         const hadConfig = this.config !== undefined;
         if (hadConfig) {
             this.pendingUrls.length = 0;
         }
-        const normalized = normalizeConfig(config);
         this.config = normalized;
         this.ready = false;
         this.lastPayload = null;
@@ -155,13 +171,14 @@ class LinkMeController {
         this.initialUrlChecked = true;
         try {
             const url = await this.linking?.getInitialURL?.();
+            if (!this.isCurrent(generation, cfg)) return null;
             if (url) {
                 return await this.processUrl(url, true, generation);
             }
         } catch {
             /* noop */
         }
-        return this.lastPayload;
+        return this.isCurrent(generation, cfg) ? this.lastPayload : null;
     }
 
     async handleUrl(url: string): Promise<boolean> {
@@ -218,7 +235,7 @@ class LinkMeController {
                 body.device = device;
             }
             this.logDebug('deferred.fingerprint.request');
-            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/deferred/claim`, {
+            const res = await this.request(cfg, `${cfg.apiBaseUrl}/deferred/claim`, {
                 method: 'POST',
                 headers: this.buildHeaders(true),
                 body: JSON.stringify(body),
@@ -231,14 +248,13 @@ class LinkMeController {
             const payload = await this.parsePayload(res);
             if (payload) {
                 this.logDebug('deferred.fingerprint.payload', { linkId: payload.linkId, duplicate: (payload as any)?.duplicate });
-                if (await this.maybeHandleForcedWebRedirect(payload)) {
-                    return null;
-                }
-                this.emit(payload);
+                const handled = await this.maybeHandleForcedWebRedirect(payload, generation);
+                if (handled || !this.isCurrent(generation, cfg)) return null;
+                this.emit(payload, generation);
             } else {
                 this.logDebug('deferred.fingerprint.no_match');
             }
-            return payload;
+            return this.isCurrent(generation, cfg) ? payload : null;
         } catch (err) {
             this.logDebug('deferred.fingerprint.error', { message: err instanceof Error ? err.message : String(err) });
             return null;
@@ -262,7 +278,7 @@ class LinkMeController {
             }
 
             this.logDebug('install_referrer.request');
-            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/install-referrer`, {
+            const res = await this.request(cfg, `${cfg.apiBaseUrl}/install-referrer`, {
                 method: 'POST',
                 headers: this.buildHeaders(true),
                 body: JSON.stringify({ referrer }),
@@ -274,10 +290,10 @@ class LinkMeController {
             }
             const payload = await this.parsePayload(res);
             if (payload) {
-                if (await this.maybeHandleForcedWebRedirect(payload)) {
-                    return { handled: true, payload: null };
-                }
-                this.emit(payload);
+                const handled = await this.maybeHandleForcedWebRedirect(payload, generation);
+                if (handled || !this.isCurrent(generation, cfg)) return { handled: true, payload: null };
+                this.emit(payload, generation);
+                if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
                 void this.track('claim', { claim_type: 'install_referrer' });
                 return { handled: true, payload };
             }
@@ -312,11 +328,12 @@ class LinkMeController {
             const payload = await this.resolveCidWithConfig(cfg, cid);
             if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
             if (payload) {
-                if (await this.maybeHandleForcedWebRedirect(payload)) {
-                    return { handled: true, payload: null };
-                }
-                this.emit(payload);
-                await this.clearPasteboardCidIfPresent(cid);
+                const handled = await this.maybeHandleForcedWebRedirect(payload, generation);
+                if (handled || !this.isCurrent(generation, cfg)) return { handled: true, payload: null };
+                this.emit(payload, generation);
+                if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
+                await this.clearPasteboardCidIfPresent(cid, cfg, generation);
+                if (!this.isCurrent(generation, cfg)) return { handled: true, payload: null };
                 // Track pasteboard claim
                 this.logDebug('pasteboard.payload', { linkId: payload.linkId });
                 void this.track('claim', { claim_type: 'pasteboard' });
@@ -383,13 +400,13 @@ class LinkMeController {
         }
     }
 
-    private async clearPasteboardCidIfPresent(cid: string): Promise<void> {
+    private async clearPasteboardCidIfPresent(cid: string, cfg: NormalizedConfig, generation: number): Promise<void> {
         if (!cid || !Clipboard?.getStringAsync) {
             return;
         }
         try {
             const current = await Clipboard.getStringAsync();
-            if (!current || !current.includes(cid)) {
+            if (!this.isCurrent(generation, cfg) || !current || !current.includes(cid)) {
                 return;
             }
             if (Clipboard.setStringAsync) {
@@ -407,7 +424,7 @@ class LinkMeController {
 
     private async resolveCidWithConfig(cfg: NormalizedConfig, cid: string): Promise<LinkMePayload | null> {
         try {
-            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/deeplink?cid=${encodeURIComponent(cid)}`, {
+            const res = await this.request(cfg, `${cfg.apiBaseUrl}/deeplink?cid=${encodeURIComponent(cid)}`, {
                 method: 'GET',
                 headers: this.buildHeaders(false),
             });
@@ -423,6 +440,7 @@ class LinkMeController {
     }
 
     setUserId(userId: string | null): void {
+        if (this.userId !== (userId ?? undefined)) this.cancelPendingRequests();
         this.userId = userId ?? undefined;
     }
 
@@ -459,7 +477,7 @@ class LinkMeController {
             if (this.userId) {
                 body.userId = this.userId;
             }
-            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/app-events`, {
+            const res = await this.request(cfg, `${cfg.apiBaseUrl}/app-events`, {
                 method: 'POST',
                 headers: this.buildHeaders(true),
                 body: JSON.stringify(body),
@@ -484,8 +502,13 @@ class LinkMeController {
         };
     }
 
-    dispose(): void {
+    cancelPendingRequests(): void {
         this.generation += 1;
+        this.requests.cancelAll();
+    }
+
+    dispose(): void {
+        this.cancelPendingRequests();
         this.linkingSubscription?.remove();
         this.linkingSubscription = null;
         this.listeners.clear();
@@ -559,12 +582,12 @@ class LinkMeController {
         }
         if (!this.isCurrent(generation, cfg)) return null;
         if (payload) {
-            if (await this.maybeHandleForcedWebRedirect(payload)) {
-                return suppressForcedReturn ? null : payload;
-            }
-            this.emit(payload);
+            const handled = await this.maybeHandleForcedWebRedirect(payload, generation);
+            if (!this.isCurrent(generation, cfg)) return null;
+            if (handled) return suppressForcedReturn ? null : payload;
+            this.emit(payload, generation);
         }
-        return payload;
+        return this.isCurrent(generation, cfg) ? payload : null;
     }
 
     private parseUrl(url: string): URL | null {
@@ -586,7 +609,7 @@ class LinkMeController {
             if (device) {
                 headers['x-linkme-device'] = JSON.stringify(device);
             }
-            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/deeplink?cid=${encodeURIComponent(cid)}`, {
+            const res = await this.request(cfg, `${cfg.apiBaseUrl}/deeplink?cid=${encodeURIComponent(cid)}`, {
                 method: 'GET',
                 headers,
             });
@@ -608,7 +631,7 @@ class LinkMeController {
             if (device) {
                 body.device = device;
             }
-            const res = await this.fetchImpl(`${cfg.apiBaseUrl}/deeplink/resolve-url`, {
+            const res = await this.request(cfg, `${cfg.apiBaseUrl}/deeplink/resolve-url`, {
                 method: 'POST',
                 headers: this.buildHeaders(true),
                 body: JSON.stringify(body),
@@ -674,13 +697,23 @@ class LinkMeController {
         return device;
     }
 
-    private async parsePayload(res: Response, assumeLinkMe = true): Promise<LinkMePayload | null> {
+    private request(cfg: NormalizedConfig, input: RequestInfo | URL, init?: RequestInit): Promise<BufferedResponse> {
+        return this.requests.run(cfg.requestTimeoutMs, async (signal) => {
+            if (this.config !== cfg) throw new Error('LinkMe configuration changed');
+            const res = await this.fetchImpl(input, { ...init, signal });
+            const text = await res.text();
+            return { ok: res.ok, status: res.status, json: async () => JSON.parse(text), text: async () => text };
+        }, [init?.signal]);
+    }
+
+    private async parsePayload(res: BufferedResponse, assumeLinkMe = true): Promise<LinkMePayload | null> {
         try {
             const json = (await res.json()) as unknown;
             if (!json || typeof json !== 'object' || Array.isArray(json)) {
                 return null;
             }
             const raw = json as Record<string, unknown>;
+            if (raw.navigationAllowed != null && typeof raw.navigationAllowed !== 'boolean') return null;
             const payload: LinkMePayload = {};
             let hasPayloadField = false;
             if (typeof raw.cid === 'string') { payload.cid = raw.cid; hasPayloadField = true; }
@@ -689,6 +722,17 @@ class LinkMeController {
             if (typeof raw.url === 'string') { payload.url = raw.url; hasPayloadField = true; }
             if (typeof raw.isLinkMe === 'boolean') { payload.isLinkMe = raw.isLinkMe; hasPayloadField = true; }
             if (typeof raw.duplicate === 'boolean') { payload.duplicate = raw.duplicate; hasPayloadField = true; }
+            for (const key of ["claimId", "claimMethod", "matchConfidence", "attributionStatus"] as const) {
+                if (typeof raw[key] === 'string') payload[key] = raw[key];
+            }
+            for (const key of ["contractVersion", "claimPolicyVersion"] as const) {
+                const value = raw[key];
+                if (typeof value === 'number' && Number.isInteger(value) && value > 0) payload[key] = value;
+            }
+            if (typeof raw.navigationAllowed === 'boolean') {
+                payload.navigationAllowed = raw.navigationAllowed;
+                if (raw.navigationAllowed === false && typeof raw.claimId === 'string' && raw.claimId.trim()) hasPayloadField = true;
+            }
             if (typeof raw.forceRedirectWeb === 'boolean') { payload.forceRedirectWeb = raw.forceRedirectWeb; hasPayloadField = true; }
             if (typeof raw.webFallbackUrl === 'string') { payload.webFallbackUrl = raw.webFallbackUrl; hasPayloadField = true; }
             for (const key of ['params', 'utm', 'custom'] as const) {
@@ -713,7 +757,7 @@ class LinkMeController {
         }
     }
 
-    private async readErrorCode(res: Response): Promise<string | undefined> {
+    private async readErrorCode(res: BufferedResponse): Promise<string | undefined> {
         try {
             const data = (await res.json()) as { error?: unknown } | null;
             return typeof data?.error === 'string' ? data.error : undefined;
@@ -733,9 +777,12 @@ class LinkMeController {
         };
     }
 
-    private emit(payload: LinkMePayload): void {
+    private emit(payload: LinkMePayload, generation: number): void {
+        if (generation !== this.generation || !this.ready) return;
+        if (payload.navigationAllowed === false) return;
         this.lastPayload = payload;
         for (const listener of this.listeners) {
+            if (generation !== this.generation) break;
             try {
                 listener(payload);
             } catch {
@@ -759,7 +806,9 @@ class LinkMeController {
         }
     }
 
-    private async maybeHandleForcedWebRedirect(payload: LinkMePayload): Promise<boolean> {
+    private async maybeHandleForcedWebRedirect(payload: LinkMePayload, generation: number): Promise<boolean> {
+        if (generation !== this.generation || !this.ready) return true;
+        if (payload.navigationAllowed === false) return true;
         if (payload.forceRedirectWeb !== true) {
             return false;
         }
@@ -790,6 +839,7 @@ function normalizeConfig(config: LinkMeConfig): NormalizedConfig {
         ...config,
         baseUrl: trimmed,
         apiBaseUrl: `${trimmed}/api`,
+        requestTimeoutMs: normalizeRequestTimeout(config.requestTimeoutMs),
     };
 }
 
@@ -861,6 +911,10 @@ export function onLink(listener: Listener): { remove: () => void } {
     return defaultController.onLink(listener);
 }
 
+export function cancelPendingRequests(): void {
+    defaultController.cancelPendingRequests();
+}
+
 export function dispose(): void {
     defaultController.dispose();
 }
@@ -908,6 +962,10 @@ export class LinkMeClient {
 
     onLink(listener: Listener): { remove: () => void } {
         return this.controller.onLink(listener);
+    }
+
+    cancelPendingRequests(): void {
+        this.controller.cancelPendingRequests();
     }
 
     dispose(): void {

@@ -1,5 +1,18 @@
 # LinkMe React Native SDK
 
+For apps sharing a domain, the next SDK release supports Expo plugin surface scopes:
+
+```json
+{
+  "plugins": [["@li-nk.me/react-native-sdk", {
+    "hosts": ["links.example.com"],
+    "pathPrefixes": { "links.example.com": ["/customer/i/"] }
+  }]]
+}
+```
+
+Use the canonical surface path for each app. The plugin preserves existing filters and rejects conflicting broad filters that would still capture the whole host; update those filters explicitly before prebuilding. Static path scopes apply on older Android versions too. Edge's dynamic rules refine the same scope on Android 15+. Signed-device verification is still required. This option is unreleased and is not in published 0.2.15.
+
 Deep linking, deferred deep linking, and attribution for React Native and Expo apps.
 
 [![npm](https://img.shields.io/npm/v/@li-nk.me/react-native-sdk)](https://www.npmjs.com/package/@li-nk.me/react-native-sdk)
@@ -174,3 +187,71 @@ As of October 24, 2026, the SDK audit is clean, while `npm audit --prefix exampl
 ## License
 
 Apache-2.0
+
+## Claim metadata (unreleased)
+
+Updated Edge claims can include `claimId`, `claimMethod`, `matchConfidence`,
+`attributionStatus`, `contractVersion`, and `claimPolicyVersion`. These optional
+fields are preserved in the payload. Treat `fingerprint_exact` / `inferred` as
+heuristic attribution, not a verified install or authenticated identity.
+Replaying a CID returns its saved outcome; `duplicate` is a deprecated legacy
+projection and must not suppress a new link navigation based on shared IP/UA.
+
+Supply your app ID for deferred matching. New apps have fingerprint fallback
+disabled; enable inferred attribution explicitly in app settings if appropriate.
+Enabled matching requires a unique exact IP/UA candidate within 30 minutes.
+Explicit CID and Play referrer claims use the deterministic 72-hour token window,
+subject to link expiry and current app/link/domain policy.
+
+
+Fingerprint matches return campaign/claim metadata with `navigationAllowed: false`.
+They withhold the CID, link ID, path, custom data, query parameters and destination
+URLs. The SDK suppresses app-routing callbacks and automatic browser launches for
+these responses. Web callers can inspect returned metadata explicitly; native
+routing APIs may return no link. A claim receipt is not a redeemable link token.
+An independently supplied valid CID/referrer can still authorize navigation with
+`navigationAllowed: true`; it retains the original claim receipt and attribution
+classification rather than generating another claim.
+
+## Tracking credentials and acceptance (unreleased Edge)
+
+Configure an app ID and a key with `can_ingest` for client telemetry. In Portal,
+select **Client analytics and link reading**; it cannot manage links, settings,
+or keys, and cannot read private management/visitor diagnostics. A read-only key cannot ingest events. Both event routes require validated
+credentials even when link resolution permits optional keys.
+
+The existing `track` API uses the legacy `/api/app-events` route. Its return does
+not prove delivery, durable webhook acknowledgement, or a verified conversion.
+The SDK currently has no durable telemetry queue and does not promise event-ID
+retry semantics. New Edge stores legacy events with app scope; an omitted event
+ID receives a server ID, so calling `track` again creates another event. Optional
+`userId` is a caller-provided pseudonym, not authenticated identity.
+
+For explicit persistence receipts and safe HTTP retries, `/api/app-events/v1`
+accepts a versioned envelope with a stable `eventId`, `occurredAt`, SDK/version,
+platform, consent and structured properties. Reuse the same event ID and content
+on retry; a successful receipt is 202, changed content is 409. The route requires
+`can_ingest`, bounds the body to 32 KiB, and rate-limits by app. Claim events are
+server-owned. This SDK has not yet adopted the versioned sender/queue contract.
+
+## Request deadlines and cancellation (unreleased)
+
+`requestTimeoutMs` defaults to 15000 and covers the complete HTTP fetch and
+response-body operation. Set a positive integer up to 2147483647 milliseconds;
+invalid overrides fail during configuration. `cancelPendingRequests()` aborts
+current transport signals and settles callers even if an injected fetch ignores
+abort. Later requests remain usable. No implicit retry is added. Cancellation or
+a timeout cannot retract work already accepted by the server.
+
+Reconfiguring or disposing cancels pending network work. Changing `setUserId`
+also invalidates pending results; an old response cannot emit a route, launch a
+browser or replace current payload state. Reconfigure clears payload, identity
+and attribution context. Listeners survive reconfiguration, receive future
+results without automatic replay, and are removed by `dispose()`. A lifecycle
+change inside one listener stops delivery of that result to later listeners.
+
+Web link methods return `null` on transport failure; React Native `handleUrl`
+returns `false` and deferred methods return no link. Tracking keeps its existing
+best-effort `void` result. These changes cover HTTP operations. Native URL,
+clipboard and Install Referrer discovery waits and the complete cross-platform
+lifecycle matrix still require separate qualification.
