@@ -38,6 +38,153 @@ function linking(initialUrl: string | null = null) {
 }
 
 describe('LinkMeClient', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('bounds stalled fetch/body/event operations and cancels their transport signals', async () => {
+    jest.useFakeTimers();
+    const fetchImpl = jest.fn<Promise<Response>, [string, RequestInit?]>().mockImplementation(() => new Promise(() => {}));
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: linking() as any });
+    for (const requestTimeoutMs of [0, -1, NaN, Infinity, 1.5, 2_147_483_648]) {
+      await expect(client.configure({ requestTimeoutMs })).rejects.toThrow(RangeError);
+    }
+    await client.configure({ baseUrl: 'https://li-nk.me', requestTimeoutMs: 30 });
+    const request = client.handleUrl('https://li-nk.me/?cid=stalled1');
+    await jest.advanceTimersByTimeAsync(30);
+    await expect(request).resolves.toBe(false);
+    expect(fetchImpl.mock.calls[0][1]?.signal?.aborted).toBe(true);
+
+    fetchImpl.mockImplementationOnce(async () => ({ ok: true, status: 200, text: () => new Promise(() => {}) } as Response));
+    const body = client.handleUrl('https://li-nk.me/?cid=stalled2');
+    await jest.advanceTimersByTimeAsync(30);
+    await expect(body).resolves.toBe(false);
+    expect(fetchImpl.mock.calls[1][1]?.signal?.aborted).toBe(true);
+
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const event = client.track('stalled');
+      await jest.advanceTimersByTimeAsync(30);
+      await expect(event).resolves.toBeUndefined();
+      expect(fetchImpl.mock.calls[2][1]?.signal?.aborted).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally { warning.mockRestore(); client.dispose(); }
+  });
+
+  it('cancels body reads across app/identity changes and disposal, even if transport ignores abort', async () => {
+    const l = linking();
+    let release!: (text: string) => void;
+    let started!: () => void;
+    const fetchImpl = jest.fn(async () => ({ ok: true, status: 200, text: () => { started(); return new Promise<string>(resolve => { release = resolve; }); } } as Response));
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: l as any });
+    const received: unknown[] = [];
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'old-app' });
+    client.onLink(payload => received.push(payload));
+    for (const change of ['configure', 'identity', 'dispose', 'cancel']) {
+      const bodyStarted = new Promise<void>(resolve => { started = resolve; });
+      const pending = client.handleUrl('https://li-nk.me/?cid=pending1');
+      await bodyStarted;
+      if (change === 'configure') await client.configure({ baseUrl: 'https://li-nk.me', appId: 'new-app' });
+      if (change === 'identity') await client.setUserId('new-user');
+      if (change === 'dispose') client.dispose();
+      if (change === 'cancel') client.cancelPendingRequests();
+      await expect(pending).resolves.toBe(false);
+      expect((fetchImpl.mock.calls[fetchImpl.mock.calls.length - 1] as unknown as [string, RequestInit])[1].signal?.aborted).toBe(true);
+      release(JSON.stringify({ path: '/old-app', forceRedirectWeb: true, webFallbackUrl: 'https://must-not-open.example' }));
+      await Promise.resolve();
+      expect(received).toEqual([]);
+      expect(l.opened).toEqual([]);
+      if (change === 'dispose') await client.configure({ baseUrl: 'https://li-nk.me' });
+    }
+    client.dispose();
+  });
+
+  it('stops remaining routing callbacks after a reentrant lifecycle change', async () => {
+    for (const change of ['configure', 'identity', 'dispose', 'cancel']) {
+      const client = new LinkMeClient({ fetchImpl: jest.fn(async () => jsonResponse({ path: '/route' })) as typeof fetch, linking: linking() as any });
+      await client.configure({ baseUrl: 'https://li-nk.me' });
+      const later = jest.fn();
+      client.onLink(() => {
+        if (change === 'configure') void client.configure({ baseUrl: 'https://li-nk.me', appId: 'new-app' });
+        if (change === 'identity') void client.setUserId('new-user');
+        if (change === 'dispose') client.dispose();
+        if (change === 'cancel') client.cancelPendingRequests();
+      });
+      client.onLink(later);
+      await client.handleUrl('https://li-nk.me/?cid=reentrant');
+      expect(later).not.toHaveBeenCalled();
+      client.dispose();
+    }
+  });
+
+  it('drops unsent analytics on app switch and does not transfer old identity to the next event', async () => {
+    const fetchImpl = jest.fn(async (_url: string, _init?: RequestInit) => jsonResponse(null, 204));
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: linking() as any });
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-a' });
+      await client.setUserId('user-a');
+      const queued = client.track('old-event');
+      await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-b' });
+      await queued;
+      expect(fetchImpl).not.toHaveBeenCalled();
+      await client.track('new-event');
+      expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({ 'x-app-id': 'app-b' });
+      const body = JSON.parse(fetchImpl.mock.calls[0][1]?.body as string);
+      expect(body).toMatchObject({ type: 'new-event' });
+      expect(body).not.toHaveProperty('userId');
+    } finally { warning.mockRestore(); client.dispose(); }
+  });
+
+  it.each(['android', 'ios'])('does not write old %s claim telemetry after a routing listener switches app', async platform => {
+    (Platform as any).OS = platform;
+    (NativeModules as any).LinkMeInstallReferrer = { getInstallReferrer: jest.fn(async () => 'cid=abcdef12') };
+    clipboard.getStringAsync.mockResolvedValue('linkme:cid=abcdef12');
+    const fetchImpl = jest.fn(async () => jsonResponse({ cid: 'abcdef12', path: '/old-app' }));
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: linking() as any });
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-a' });
+    client.onLink(() => { void client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-b' }); });
+    await expect(client.claimDeferredIfAvailable()).resolves.toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(clipboard.setStringAsync).not.toHaveBeenCalled();
+    client.dispose();
+  });
+
+  it('does not clear the clipboard or send old claim telemetry after switching app during a clipboard read', async () => {
+    (Platform as any).OS = 'ios';
+    let clearStarted!: () => void;
+    let release!: (value: string) => void;
+    const started = new Promise<void>(resolve => { clearStarted = resolve; });
+    clipboard.getStringAsync.mockResolvedValueOnce('linkme:cid=abcdef12').mockImplementationOnce(() => {
+      clearStarted();
+      return new Promise(resolve => { release = resolve; });
+    });
+    const fetchImpl = jest.fn(async () => jsonResponse({ cid: 'abcdef12', path: '/old-app' }));
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: linking() as any });
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-a' });
+    const old = client.claimDeferredIfAvailable();
+    await started;
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-b' });
+    release('linkme:cid=abcdef12');
+    await expect(old).resolves.toBeNull();
+    expect(clipboard.setStringAsync).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    client.dispose();
+  });
+
+  it('does not return the new app payload to an old initial-URL caller', async () => {
+    let release!: (url: string | null) => void;
+    const l = { ...linking(), getInitialURL: () => new Promise<string | null>(resolve => { release = resolve; }) };
+    const fetchImpl = jest.fn(async () => jsonResponse({ cid: 'new12345', path: '/new-app' }));
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: l as any });
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-a' });
+    const old = client.getInitialLink();
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app-b' });
+    await client.handleUrl('https://li-nk.me/?cid=new12345');
+    release(null);
+    await expect(old).resolves.toBeNull();
+    await expect(client.getInitialLink()).resolves.toMatchObject({ path: '/new-app' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    client.dispose();
+  });
   beforeEach(() => {
     (Platform as any).OS = 'android';
     (Platform as any).Version = 35;
@@ -85,6 +232,32 @@ describe('LinkMeClient', () => {
     const eventBody = JSON.parse(fetchImpl.mock.calls[1][1]?.body as string);
     expect(eventBody).toMatchObject({ type: 'open', cid: 'abc12345', detail: JSON.stringify({ page: 'home' }) });
     await expect(client.handleUrl('https://li-nk.me/?cid=bad12345')).resolves.toBe(false);
+  });
+
+  it('suppresses routing and browser launch for inferred metadata-only responses', async () => {
+    const l = linking();
+    const fetchImpl = jest.fn(async () => jsonResponse({ navigationAllowed: false, claimId: 'inferred', utm: { utm_source: 'campaign' }, forceRedirectWeb: true, webFallbackUrl: 'https://must-not-open.example' }));
+    const client = new LinkMeClient({ fetchImpl: fetchImpl as typeof fetch, linking: l as any });
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app' });
+    const routed: unknown[] = [];
+    client.onLink(payload => routed.push(payload));
+    await client.claimDeferredIfAvailable();
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining('/deferred/claim'), expect.anything());
+    expect(routed).toEqual([]);
+    expect(l.opened).toEqual([]);
+    fetchImpl.mockImplementationOnce(async () => jsonResponse({ navigationAllowed: 'false', path: '/must-not-route' }));
+    await expect(client.handleUrl('https://li-nk.me/?cid=abcd1234')).resolves.toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(routed).toEqual([]);
+    expect(l.opened).toEqual([]);
+  });
+
+  it('retains claim policy metadata through URL resolution', async () => {
+    const fixture = JSON.parse(readFileSync(resolve(__dirname, '../test-fixtures/link-payload.claim-policy-v2.json'), 'utf8'));
+    const client = new LinkMeClient({ fetchImpl: jest.fn(async () => jsonResponse(fixture)) as typeof fetch, linking: linking() as any });
+    await client.configure({ baseUrl: 'https://li-nk.me', appId: 'app' });
+    await client.handleUrl(`https://li-nk.me/?cid=${fixture.cid}`);
+    await expect(client.getInitialLink()).resolves.toMatchObject({ claimId: fixture.claimId, claimMethod: 'direct_cid', matchConfidence: 'high', attributionStatus: 'deterministic', claimPolicyVersion: 2, contractVersion: 1 });
   });
 
   it('parses the shared v1 golden payload and ignores future fields', async () => {

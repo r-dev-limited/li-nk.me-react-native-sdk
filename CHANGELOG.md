@@ -4,6 +4,13 @@ All notable changes to the LinkMe React Native SDK.
 
 ## Unreleased
 
+- Bound HTTP fetch/body operations to a configurable 15-second default and expose `cancelPendingRequests()`. Reconfigure, dispose and identity changes cancel pending work; late responses and reentrant lifecycle changes cannot deliver stale routes.
+
+- Preserve optional `navigationAllowed` and suppress routing callbacks/browser launches when false. Accept campaign-only inferred receipts without exposing a CID or private route.
+
+- Preserve additive claim ID, method, confidence, attribution status, payload contract version, and claim policy version in routing payloads.
+
+- Add per-host `pathPrefixes` to the Expo plugin for Android apps sharing a link domain; reject conflicting existing filters and preserve idempotent prebuilds.
 - Upgrade the Expo config plugin tooling to 58.0.10.
 - Upgrade the example to Expo SDK 58, React Native 0.88.0, the matching React 19.3 release, and Jest 30.
 - Regenerate native example projects and enable Metro package exports required by the current React Native runtime.
