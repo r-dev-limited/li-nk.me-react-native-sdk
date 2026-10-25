@@ -220,10 +220,8 @@ describe('LinkMe Expo example', () => {
     });
 
     beforeEach(async () => {
-        await launchLinkMeApp({
-            newInstance: false,
-        });
-        // await device.disableSynchronization();
+        // Each navigation test returns home in the running app. Launching an
+        // already active scene again can hang simctl on iOS 27.
         await expectHomeReady();
     });
 
