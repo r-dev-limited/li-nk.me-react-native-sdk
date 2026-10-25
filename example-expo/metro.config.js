@@ -29,6 +29,4 @@ const blockListPatterns = [
 ];
 config.resolver.blockList = new RegExp(blockListPatterns.join('|'));
 
-config.resolver.unstable_enablePackageExports = false;
-
 module.exports = config;

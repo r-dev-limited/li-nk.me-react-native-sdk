@@ -31,9 +31,10 @@ const iosDebugBinary = path.join(
 );
 
 function createXcodeBuildCommand(configuration) {
+    // Xcode 27 can emit false Swift compilation errors when -quiet is used.
+    // https://github.com/expo/expo/issues/50279
     return [
         'xcodebuild',
-        ...(process.env.LINKME_XCODE_VERBOSE === '1' ? [] : ['-quiet']),
         '-workspace ios/LinkMeRNExample.xcworkspace',
         '-scheme LinkMeRNExample',
         '-configuration',

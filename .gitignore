@@ -12,3 +12,5 @@ coverage/
 *.log
 
 example-expo/.expo/
+example-expo/dist/
+**/android/.kotlin/

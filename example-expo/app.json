@@ -29,6 +29,6 @@
     "android": {
       "package": "me.link.example"
     },
-    "sdkVersion": "57.0.0"
+    "sdkVersion": "58.0.0"
   }
 }

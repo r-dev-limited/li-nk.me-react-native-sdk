@@ -16,7 +16,7 @@ Deep linking, deferred deep linking, and attribution for React Native and Expo a
 
 - A LinkMe app with iOS bundle ID and Android package name configured
 - API keys (`appId` and `appKey`) from **App Settings > API Keys**
-- React Native 0.72+ for bare apps, or Expo SDK 57 (the bundled example uses RN 0.86)
+- React Native 0.72+ for bare apps, or Expo SDK 58 (the bundled example uses RN 0.88)
 - Node.js 22+ for the SDK development and release tooling
 
 The Expo config plugin is an optional peer dependency. Expo applications

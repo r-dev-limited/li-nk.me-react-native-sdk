@@ -2,6 +2,13 @@
 
 All notable changes to the LinkMe React Native SDK.
 
+## Unreleased
+
+- Upgrade the Expo config plugin tooling to 58.0.10.
+- Upgrade the example to Expo SDK 58, React Native 0.88.0, the matching React 19.3 release, and Jest 30.
+- Regenerate native example projects and enable Metro package exports required by the current React Native runtime.
+- Avoid Xcode 27 quiet-mode diagnostics and redundant scene launches in iOS consumer tests.
+
 ## 0.2.15
 
 - Drops in-flight link and deferred-claim responses after disposal or reconfiguration so an older app configuration cannot emit stale payloads.
