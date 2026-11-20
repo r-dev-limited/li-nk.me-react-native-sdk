@@ -110,15 +110,6 @@ jobs:
       - name: Run the iOS release consumer E2E
         working-directory: example-expo
         run: npm run e2e:build:release && npm run e2e:test:release -- --headless --reuse --no-start
-      - name: Upload consumer diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: react-native-expo-consumer-diagnostics
-          path: |
-            example-expo/artifacts/
-            example-expo/ios/build/
-          if-no-files-found: ignore
 
   expo-consumer:
     name: Expo consumer (Android build and iOS release E2E)
