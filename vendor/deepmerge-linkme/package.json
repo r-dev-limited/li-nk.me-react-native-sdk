@@ -1,0 +1,16 @@
+{
+  "name": "deepmerge",
+  "version": "4.3.2+linkme.1",
+  "description": "LinkMe-maintained security-hardened fork of deepmerge 4.3.1",
+  "homepage": "https://github.com/TehShrike/deepmerge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TehShrike/deepmerge.git"
+  },
+  "main": "dist/cjs.js",
+  "types": "index.d.ts",
+  "license": "MIT",
+  "dependencies": {
+    "is-mergeable-object": "1.1.0"
+  }
+}

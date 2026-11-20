@@ -7,10 +7,15 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.major }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [22, 24]
+        include:
+          - node: '22.23.4'
+            major: 22
+          - node: '24.22.1'
+            major: 24
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.0.0
@@ -18,6 +23,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - run: npm audit
       - run: npm test
       - run: npm test -- --coverage
       - run: npm run build
@@ -28,8 +34,41 @@ jobs:
           npm pack --dry-run --json --ignore-scripts > pack.json
           node -e "const raw=require('./pack.json'); const findFiles=v=>{if(!v||typeof v!=='object')return null;if(Array.isArray(v.files))return v.files;for(const child of Object.values(v)){const found=findFiles(child);if(found)return found}return null}; const entries=findFiles(raw); if(!entries) { console.error('npm pack JSON did not contain a files list'); process.exit(1) }; const files=entries.map(f=>typeof f==='string'?f:f.path); if(!files.includes('LICENSE') || files.some(f=>/\.test\./.test(f))) process.exit(1); console.log('archive-ok')"
 
-  expo-consumer:
-    name: Expo consumer (Android build and iOS release E2E)
+  expo-android:
+    name: Expo consumer - Android build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            example-expo/package-lock.json
+      - name: Install and build the SDK
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Install the Expo consumer
+        working-directory: example-expo
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Typecheck the Expo consumer
+        working-directory: example-expo
+        run: npm run typecheck
+      - name: Generate native projects
+        working-directory: example-expo
+        run: npx expo prebuild --clean --no-install
+      - name: Validate the Expo JavaScript bundle
+        working-directory: example-expo
+        run: npx expo export --platform android
+      - name: Build the Android consumer
+        working-directory: example-expo/android
+        run: ./gradlew assembleDebug --no-daemon
+
+  expo-ios:
+    name: Expo consumer - iOS release E2E
     # Expo/RN's current Apple package requires Swift 6.2; macos-26 provides Xcode 26.x.
     runs-on: macos-26
     timeout-minutes: 45
@@ -37,7 +76,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 22
+          node-version-file: '.nvmrc'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -58,12 +97,6 @@ jobs:
       - name: Install iOS pods
         working-directory: example-expo/ios
         run: pod install --no-repo-update
-      - name: Validate the Expo JavaScript bundle
-        working-directory: example-expo
-        run: npx expo export --platform android
-      - name: Build the Android consumer
-        working-directory: example-expo/android
-        run: ./gradlew assembleDebug --no-daemon
       - name: Install applesimutils for Detox
         run: |
           brew tap wix-incubator/brew
@@ -77,12 +110,20 @@ jobs:
       - name: Run the iOS release consumer E2E
         working-directory: example-expo
         run: npm run e2e:build:release && npm run e2e:test:release -- --headless --reuse --no-start
-      - name: Upload consumer diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: react-native-expo-consumer-diagnostics
-          path: |
-            example-expo/artifacts/
-            example-expo/ios/build/
-          if-no-files-found: ignore
+
+  expo-consumer:
+    name: Expo consumer (Android build and iOS release E2E)
+    needs: [expo-android, expo-ios]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require both platform jobs to pass
+        env:
+          ANDROID_RESULT: ${{ needs['expo-android'].result }}
+          IOS_RESULT: ${{ needs['expo-ios'].result }}
+        run: |
+          if [ "$ANDROID_RESULT" != "success" ] || [ "$IOS_RESULT" != "success" ]; then
+            echo "::error::Expo consumer platform jobs did not both succeed (Android=$ANDROID_RESULT, iOS=$IOS_RESULT)."
+            exit 1
+          fi
